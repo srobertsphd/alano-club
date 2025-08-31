@@ -1,7 +1,16 @@
 [project]
 name = "alano-club"
 version = "0.1.0"
-description = "Add your description here"
+description = "Alano Club Member Management System"
 readme = "README.md"
 requires-python = ">=3.12.4"
-dependencies = []
+dependencies = [
+    "django>=4.2,<5.0",
+    "psycopg2-binary>=2.9.0",
+    "python-dotenv>=1.0.0",
+    "dj-database-url>=2.0.0",
+    "whitenoise>=6.0.0",
+    "gunicorn>=21.0.0",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+]
