@@ -115,7 +115,11 @@ class Member(models.Model):
 class Payment(models.Model):
     """Payment records linked to members via UUID"""
 
-    payment_id = models.IntegerField(primary_key=True)  # From CSV: Payment ID
+    # Auto-assigned primary key (Django standard)
+    id = models.AutoField(primary_key=True)
+
+    # Original CSV Payment ID for reference
+    original_payment_id = models.IntegerField()  # From CSV: Payment ID
 
     # Relationships (CRITICAL: UUID not member_id!)
     member = models.ForeignKey(
