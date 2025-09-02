@@ -12,8 +12,10 @@ def landing_view(request):
 
 
 def search_view(request):
-    """Simple member search page"""
+    """Simple member search page with alphabet browsing and status filtering"""
     query = request.GET.get("q", "").strip()
+    browse_range = request.GET.get("browse", "").strip()
+    status_filter = request.GET.get("status", "all").strip()
     members = None
 
     # Get quick stats for the search page
@@ -28,26 +30,57 @@ def search_view(request):
     )
     available_ids_count = 1000 - len(used_ids)
 
-    # Perform search if query provided
-    if query:
+    # Start with base queryset and apply status filter
+    base_queryset = Member.objects.select_related("member_type")
+
+    # Apply status filter
+    if status_filter == "active":
+        base_queryset = base_queryset.filter(status="active")
+    elif status_filter == "inactive":
+        base_queryset = base_queryset.filter(status="inactive")
+    # "all" or any other value shows all members (no additional filter)
+
+    # Handle alphabet browsing
+    if browse_range:
+        # Define the letter ranges
+        range_mapping = {
+            "A-C": ["A", "B", "C"],
+            "D-F": ["D", "E", "F"],
+            "G-I": ["G", "H", "I"],
+            "J-L": ["J", "K", "L"],
+            "M-O": ["M", "N", "O"],
+            "P-R": ["P", "Q", "R"],
+            "S-U": ["S", "T", "U"],
+            "V-Z": ["V", "W", "X", "Y", "Z"],
+        }
+
+        if browse_range in range_mapping:
+            letters = range_mapping[browse_range]
+            # Create Q objects for each letter in the range
+            letter_filters = Q()
+            for letter in letters:
+                letter_filters |= Q(last_name__istartswith=letter)
+
+            members = base_queryset.filter(letter_filters).order_by(
+                "last_name", "first_name"
+            )
+
+    # Perform search if query provided (takes precedence over browse)
+    elif query:
         # Try to search by member ID first
         try:
             member_id = int(query)
-            members = Member.objects.filter(member_id=member_id).select_related(
-                "member_type"
-            )
+            members = base_queryset.filter(member_id=member_id)
         except ValueError:
             # Search by name
-            members = (
-                Member.objects.filter(
-                    Q(first_name__icontains=query) | Q(last_name__icontains=query)
-                )
-                .select_related("member_type")
-                .order_by("last_name", "first_name")
-            )
+            members = base_queryset.filter(
+                Q(first_name__icontains=query) | Q(last_name__icontains=query)
+            ).order_by("last_name", "first_name")
 
     context = {
         "query": query,
+        "browse_range": browse_range,
+        "status_filter": status_filter,
         "members": members,
         "active_members_count": active_members_count,
         "total_payments_count": total_payments_count,

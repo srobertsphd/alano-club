@@ -16,13 +16,7 @@
         font-size: 1.1rem;
     }
     
-    .receipt-number {
-        font-family: 'Courier New', monospace;
-        font-size: 0.9rem;
-        background-color: var(--light-gray);
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-    }
+
 </style>
 {% endblock %}
 
@@ -126,7 +120,6 @@
                                     <td>
                                         {% if member.member_type %}
                                             <strong>{{ member.member_type.name }}</strong>
-                                            <small class="text-muted">(${{ member.member_type.monthly_dues }}/month)</small>
                                         {% else %}
                                             <span class="text-muted">Not assigned</span>
                                         {% endif %}
@@ -146,8 +139,6 @@
                                         <strong>{{ member.expiration_date|date:"F j, Y" }}</strong>
                                         {% if member.is_membership_expired %}
                                             <span class="badge bg-danger ms-2">Expired</span>
-                                        {% else %}
-                                            <span class="badge bg-success ms-2">Active</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -229,7 +220,6 @@
                                         <th>Amount</th>
                                         <th>Payment Method</th>
                                         <th>Receipt #</th>
-                                        <th>Payment ID</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -257,13 +247,10 @@
                                         </td>
                                         <td>
                                             {% if payment.receipt_number %}
-                                                <span class="receipt-number">{{ payment.receipt_number }}</span>
+                                                {{ payment.receipt_number|floatformat:"0" }}
                                             {% else %}
                                                 <span class="text-muted">—</span>
                                             {% endif %}
-                                        </td>
-                                        <td>
-                                            <small class="text-muted">#{{ payment.original_payment_id }}</small>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -327,6 +314,9 @@
         </div>
     </div>
 </div>
+
+<!-- Add bottom spacing -->
+<div class="pb-5 mb-4"></div>
 {% endblock %}
 
 {% block extra_js %}
