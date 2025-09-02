@@ -1,0 +1,489 @@
+{% extends 'members/base.html' %}
+
+{% block title %}Add Payment - ALANO CLUB{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Progress Indicator -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="step-indicator {% if step == 'search' %}active{% elif step == 'form' or step == 'confirm' or step == 'life_member' %}completed{% endif %}">
+                            <span class="step-number">1</span>
+                            <span class="step-label">Find Member</span>
+                        </div>
+                        {% if step == 'life_member' %}
+                        <div class="step-indicator active">
+                            <span class="step-number"><i class="bi bi-award-fill"></i></span>
+                            <span class="step-label">Lifetime Member</span>
+                        </div>
+                        <div class="step-indicator" style="opacity: 0.2;">
+                            <span class="step-number">—</span>
+                            <span class="step-label">No Payment</span>
+                        </div>
+                        {% else %}
+                        <div class="step-indicator {% if step == 'form' %}active{% elif step == 'confirm' %}completed{% endif %}">
+                            <span class="step-number">2</span>
+                            <span class="step-label">Payment Details</span>
+                        </div>
+                        <div class="step-indicator {% if step == 'confirm' %}active{% endif %}">
+                            <span class="step-number">3</span>
+                            <span class="step-label">Confirm</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Card -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="mb-0">
+                        {% if step == 'life_member' %}
+                            <i class="bi bi-award-fill me-2"></i>
+                            Lifetime Member - {{ member.full_name }}
+                        {% else %}
+                            <i class="bi bi-cash-coin me-2"></i>
+                            {% if step == 'search' %}
+                                Find Member for Payment
+                            {% elif step == 'form' %}
+                                Add Payment for {{ member.full_name }}
+                            {% elif step == 'confirm' %}
+                                Confirm Payment
+                            {% endif %}
+                        {% endif %}
+                    </h1>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Step 1: Member Search -->
+                    {% if step == 'search' %}
+                        <form method="get" class="mb-4">
+                            <input type="hidden" name="step" value="search">
+                            <div class="input-group input-group-lg">
+                                <input type="text" 
+                                       name="q" 
+                                       class="form-control" 
+                                       placeholder="Enter member name or ID..."
+                                       value="{{ query }}"
+                                       autofocus>
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="bi bi-search me-1"></i>
+                                    Search
+                                </button>
+                            </div>
+                            <small class="form-text text-muted mt-2">
+                                Search by first name, last name, or member ID number (includes active and inactive members)
+                            </small>
+                        </form>
+
+                        {% if query %}
+                            {% if members %}
+                                <h5>Select Member:</h5>
+                                <div class="list-group">
+                                    {% for member in members %}
+                                    <a href="?step=form&member={{ member.member_uuid }}" 
+                                       class="list-group-item list-group-item-action">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">
+                                                    {{ member.full_name }}
+                                                    <span class="badge bg-secondary ms-2">#{{ member.member_id }}</span>
+                                                </h6>
+                                                <small class="text-muted">
+                                                    {{ member.member_type.name }} • Expires: {{ member.expiration_date|date:"M j, Y" }}
+                                                </small>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge badge-status status-{{ member.status|lower }}">
+                                                    {{ member.get_status_display }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
+                                    <h5 class="text-muted mt-3">No members found</h5>
+                                    <p class="text-muted">
+                                        Try searching for a different name or member ID.
+                                    </p>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="bi bi-person-search text-muted" style="font-size: 4rem;"></i>
+                                <h4 class="text-muted mt-3">Search for Member</h4>
+                                <p class="text-muted">
+                                    Enter a member's name or ID number to begin payment entry.
+                                </p>
+                            </div>
+                        {% endif %}
+
+                    <!-- Step 2a: Life Member Notice -->
+                    {% elif step == 'life_member' %}
+                        <div class="text-center py-5">
+                            <div class="mb-4">
+                                <i class="bi bi-award-fill text-warning" style="font-size: 5rem;"></i>
+                            </div>
+                            
+                            <h3 class="text-primary mb-3">Lifetime Member</h3>
+                            
+                            <div class="card bg-light mx-auto" style="max-width: 500px;">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ member.full_name }}</h5>
+                                    <p class="card-text mb-1">
+                                        <span class="badge bg-secondary">#{{ member.member_id }}</span>
+                                        <span class="badge bg-warning text-dark ms-2">{{ member.member_type.name }}</span>
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            Member since {{ member.date_joined|date:"F j, Y" }}
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info mt-4 mx-auto" style="max-width: 600px;">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    No Payment Required
+                                </h6>
+                                <p class="mb-0">
+                                    This member has <strong>Lifetime Membership</strong> status and does not require additional payments. 
+                                    Their membership never expires.
+                                </p>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <a href="{% url 'members:add_payment' %}" class="btn btn-primary me-2">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Search Another Member
+                                </a>
+                                <a href="{% url 'members:member_detail' member.member_uuid %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-person me-1"></i>
+                                    View Member Details
+                                </a>
+                            </div>
+                        </div>
+
+                    <!-- Step 2b: Payment Form -->
+                    {% elif step == 'form' %}
+                        <!-- Member Info Summary -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Member Information</h6>
+                                        <p class="mb-1"><strong>{{ member.full_name }}</strong> <span class="badge bg-secondary">#{{ member.member_id }}</span></p>
+                                        <p class="mb-1">Type: {{ member.member_type.name }}</p>
+                                        <p class="mb-0">Monthly Dues: <strong>${{ suggested_amount }}</strong></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Membership Dates</h6>
+                                        <p class="mb-1">Current Expiration: <span class="text-primary" id="current-expiration">{{ member.expiration_date|date:"F j, Y" }}</span></p>
+                                        <p class="mb-0">New Expiration: <span class="text-success" id="new-expiration">{{ new_expiration|date:"F j, Y" }}</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Form -->
+                        <form method="post" action="?step=confirm">
+                            {% csrf_token %}
+                            <input type="hidden" name="member_uuid" value="{{ member.member_uuid }}">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="amount" class="form-label">Payment Amount * <small class="text-muted">(Monthly increments: ${{ suggested_amount }})</small></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="amount" 
+                                                   name="amount" 
+                                                   step="{{ suggested_amount }}" 
+                                                   min="{{ suggested_amount }}" 
+                                                   value="{{ suggested_amount }}" 
+                                                   data-monthly-dues="{{ suggested_amount }}"
+                                                   data-current-expiration="{{ member.expiration_date|date:'Y-m-d' }}"
+                                                   required>
+                                            <button class="btn btn-outline-secondary" type="button" id="amount-minus">
+                                                <i class="bi bi-dash"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" type="button" id="amount-plus">
+                                                <i class="bi bi-plus"></i>
+                                            </button>
+                                        </div>
+                                        <small class="form-text text-muted">Use +/- buttons or arrows to change in monthly increments</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="payment_date" class="form-label">Payment Date *</label>
+                                        <input type="date" 
+                                               class="form-control" 
+                                               id="payment_date" 
+                                               name="payment_date" 
+                                               value="{{ today|date:'Y-m-d' }}" 
+                                               required>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="payment_method" class="form-label">Payment Method *</label>
+                                        <select class="form-select" id="payment_method" name="payment_method" required>
+                                            <option value="">Select payment method...</option>
+                                            {% for method in payment_methods %}
+                                            <option value="{{ method.payment_method_id }}">
+                                                {{ method.name }}
+                                                {% if method.is_credit_card %}<i class="bi bi-credit-card"></i>{% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="receipt_number" class="form-label">Receipt Number *</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="receipt_number" 
+                                               name="receipt_number" 
+                                               placeholder="e.g., 123456, R-2024-001" 
+                                               required>
+                                        <small class="form-text text-muted">Enter the receipt or transaction number for this payment</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'members:add_payment' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Back to Search
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    Continue to Confirmation
+                                    <i class="bi bi-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </form>
+
+                    <!-- Step 3: Confirmation -->
+                    {% elif step == 'confirm' %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Please review the payment details below and confirm to process the payment.
+                        </div>
+
+                        <!-- Payment Summary -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Member & Payment Details</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-4">Member:</dt>
+                                            <dd class="col-sm-8">{{ member.full_name }} (#{{ member.member_id }})</dd>
+                                            
+                                            <dt class="col-sm-4">Amount:</dt>
+                                            <dd class="col-sm-8"><strong class="text-success">${{ amount }}</strong></dd>
+                                            
+                                            <dt class="col-sm-4">Date:</dt>
+                                            <dd class="col-sm-8">{{ payment_date|date:"F j, Y" }}</dd>
+                                            
+                                            <dt class="col-sm-4">Method:</dt>
+                                            <dd class="col-sm-8">{{ payment_method.name }}</dd>
+                                            
+                                            <dt class="col-sm-4">Receipt:</dt>
+                                            <dd class="col-sm-8">{{ receipt_number }}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Membership Update</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-5">Current Expires:</dt>
+                                            <dd class="col-sm-7">{{ current_expiration|date:"F j, Y" }}</dd>
+                                            
+                                            <dt class="col-sm-5">New Expires:</dt>
+                                            <dd class="col-sm-7"><strong class="text-primary">{{ new_expiration|date:"F j, Y" }}</strong></dd>
+                                            
+                                            <dt class="col-sm-5">Extension:</dt>
+                                            <dd class="col-sm-7">
+                                                <span class="badge bg-success">
+                                                    Extended
+                                                </span>
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Confirmation Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="?step=form&member={{ member.member_uuid }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>
+                                Back to Edit
+                            </a>
+                            <div>
+                                <form method="post" action="?step=process" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="confirm" value="no">
+                                    <button type="submit" class="btn btn-outline-danger me-2">
+                                        <i class="bi bi-x-circle me-1"></i>
+                                        Cancel
+                                    </button>
+                                </form>
+                                <form method="post" action="?step=process" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="confirm" value="yes">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Confirm & Process Payment
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.step-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    opacity: 0.4;
+    transition: opacity 0.3s;
+}
+
+.step-indicator.active,
+.step-indicator.completed {
+    opacity: 1;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #dee2e6;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    transition: all 0.3s;
+}
+
+.step-indicator.active .step-number {
+    background-color: var(--primary-blue);
+    color: white;
+}
+
+.step-indicator.completed .step-number {
+    background-color: #28a745;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const amountInput = document.getElementById('amount');
+    const plusButton = document.getElementById('amount-plus');
+    const minusButton = document.getElementById('amount-minus');
+    const newExpirationSpan = document.getElementById('new-expiration');
+    
+    if (!amountInput || !plusButton || !minusButton || !newExpirationSpan) {
+        return; // Not on payment form step
+    }
+    
+    const monthlyDues = parseFloat(amountInput.dataset.monthlyDues);
+    const currentExpirationStr = amountInput.dataset.currentExpiration;
+    
+    // Function to calculate new expiration date
+    function calculateNewExpiration(paymentAmount) {
+        const monthsPaid = Math.floor(paymentAmount / monthlyDues);
+        const currentExpiration = new Date(currentExpirationStr + 'T00:00:00');
+        
+        // Add months and set to last day of month
+        const newExpiration = new Date(currentExpiration);
+        newExpiration.setMonth(newExpiration.getMonth() + monthsPaid);
+        
+        // Set to last day of the month
+        const lastDay = new Date(newExpiration.getFullYear(), newExpiration.getMonth() + 1, 0).getDate();
+        newExpiration.setDate(lastDay);
+        
+        return newExpiration;
+    }
+    
+    // Function to format date for display
+    function formatDate(date) {
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
+    }
+    
+    // Function to update expiration date display
+    function updateExpirationDate() {
+        const paymentAmount = parseFloat(amountInput.value) || 0;
+        const newExpiration = calculateNewExpiration(paymentAmount);
+        newExpirationSpan.textContent = formatDate(newExpiration);
+    }
+    
+    // Plus button - add one month's dues
+    plusButton.addEventListener('click', function() {
+        const currentAmount = parseFloat(amountInput.value) || 0;
+        const newAmount = currentAmount + monthlyDues;
+        amountInput.value = newAmount.toFixed(2);
+        updateExpirationDate();
+    });
+    
+    // Minus button - subtract one month's dues (minimum 1 month)
+    minusButton.addEventListener('click', function() {
+        const currentAmount = parseFloat(amountInput.value) || 0;
+        const newAmount = Math.max(monthlyDues, currentAmount - monthlyDues);
+        amountInput.value = newAmount.toFixed(2);
+        updateExpirationDate();
+    });
+    
+    // Update expiration when amount is manually changed
+    amountInput.addEventListener('input', updateExpirationDate);
+    amountInput.addEventListener('change', updateExpirationDate);
+    
+    // Initial calculation
+    updateExpirationDate();
+});
+</script>
+{% endblock %}

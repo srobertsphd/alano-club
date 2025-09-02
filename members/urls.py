@@ -8,4 +8,6 @@ urlpatterns = [
     path("", views.landing_view, name="landing"),
     path("search/", views.search_view, name="search"),
     path("<uuid:member_uuid>/", views.member_detail_view, name="member_detail"),
+    # Payment functionality
+    path("payments/add/", views.add_payment_view, name="add_payment"),
 ]

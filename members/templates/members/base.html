@@ -63,8 +63,8 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
-                                <i class="bi bi-credit-card"></i>
+                            <a class="nav-link {% if request.resolver_match.url_name == 'add_payment' %}active{% endif %}" href="{% url 'members:add_payment' %}">
+                                <i class="bi bi-cash-coin"></i>
                                 Add Payment
                             </a>
                         </li>
