@@ -140,6 +140,45 @@
   - `receipt_number`: ~720 non-null (~99.7%)
   - `mobile_phone`: 6 non-null (0.8%)
 
+## Dead Members Data Processing
+
+### Data Source
+- **File**: `data/new_data/2025_08_26_Dead.xlsx`
+- **Read using**: pandas `read_excel()`
+
+### Data Transformations
+
+1. **Column Renaming**: Applied code-friendly column names using snake_case to match established conventions:
+   - `DeadID` → `dead_id`, `MemberID` → `member_id`, `First Name` → `first_name`, etc.
+
+2. **Column Removal**: Dropped unnecessary columns:
+   - `dead_id` (internal ID not needed for analysis)
+   - `payment_method` (minimal data, only 5 non-null values)
+
+3. **Duplicate Handling**: Removed duplicate name combinations by keeping records with most recent expiration dates:
+   - **Found**: 120 duplicate records across 54 unique name combinations
+   - **Kept**: Most recent expiration date for each duplicate name
+   - **Final count**: 1,346 unique members (reduced from 1,400)
+
+4. **State Standardization**: Mapped state values to proper 2-letter uppercase abbreviations:
+   - `Ca` → `CA`, `Az` → `AZ`, `Or` → `OR`, `Wy` → `WY`, `nebr` → `NE`, `Utah` → `UT`
+   - Removed 1 record with invalid state value (`\`)
+
+5. **Phone Number Standardization**: Corrected 121 phone numbers to `(XXX) XXX-XXXX` format:
+   - **Raw digits**: `4084215602` → `(408) 421-5602`
+   - **Malformed area codes**: `(6) 692-7293` → `(408) 692-7293`
+
+6. **Zip Code Cleaning**: Standardized to 5-digit format by removing hyphens and extensions
+
+7. **Data Type Conversion**: Converted `member_id` to nullable integer type (`Int64`)
+
+### Current Dead Members Dataset State
+- **Total Records**: 1,346 deceased members (cleaned from original 1,400)
+- **Total Columns**: 13
+- **Records Removed**: 54 total (duplicate names with older expiration dates)
+- **Data Quality**: Standardized phone numbers, state abbreviations, and zip codes
+- **Output File**: `data/current_dead.csv`
+
 ### Notes
 - Datetime format preserved for PostgreSQL compatibility
 - Date formatting will be handled at the PostgreSQL display layer
