@@ -5,23 +5,21 @@ from .models import Member, MemberType, PaymentMethod, Payment
 @admin.register(MemberType)
 class MemberTypeAdmin(admin.ModelAdmin):
     list_display = [
-        "member_type_id",
-        "name",
-        "monthly_dues",
-        "coverage_months",
-        "is_active",
+        "member_type",
+        "member_dues",
+        "num_months",
     ]
-    list_filter = ["is_active"]
-    search_fields = ["name"]
-    ordering = ["name"]
+    list_filter = []
+    search_fields = ["member_type"]
+    ordering = ["member_type"]
 
 
 @admin.register(PaymentMethod)
 class PaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ["payment_method_id", "name", "is_credit_card", "is_active"]
-    list_filter = ["is_credit_card", "is_active"]
-    search_fields = ["name"]
-    ordering = ["name"]
+    list_display = ["payment_method"]
+    list_filter = []
+    search_fields = ["payment_method"]
+    ordering = ["payment_method"]
 
 
 @admin.register(Member)
@@ -35,7 +33,7 @@ class MemberAdmin(admin.ModelAdmin):
         "expiration_date",
         "home_phone",
     ]
-    list_filter = ["member_type", "status", "home_country"]
+    list_filter = ["member_type", "status", "home_state"]
     search_fields = [
         "member_id",
         "first_name",
@@ -81,7 +79,9 @@ class MemberAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "home_address",
-                    "home_country",
+                    "home_city",
+                    "home_state",
+                    "home_zip",
                     "home_phone",
                 ),
             },
@@ -125,7 +125,6 @@ class MemberAdmin(admin.ModelAdmin):
 class PaymentAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "original_payment_id",
         "member",
         "amount",
         "date",
@@ -135,7 +134,6 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ["payment_method", "date"]
     search_fields = [
         "id",
-        "original_payment_id",
         "member__first_name",
         "member__last_name",
         "member__member_id",
@@ -152,7 +150,6 @@ class PaymentAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "id",
-                    "original_payment_id",
                     "member",
                     "amount",
                     "date",

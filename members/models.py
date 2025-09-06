@@ -206,9 +206,6 @@ class Member(models.Model):
 class Payment(models.Model):
     """Payment records linked to members via UUID"""
 
-    # Auto-assigned primary key (Django standard)
-    id = models.AutoField(primary_key=True)
-
     # Relationships (CRITICAL: UUID not member_id!)
     member = models.ForeignKey(
         Member, on_delete=models.PROTECT, related_name="payments"

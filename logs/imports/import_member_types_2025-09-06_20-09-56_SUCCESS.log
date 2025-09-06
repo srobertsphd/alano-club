@@ -1,0 +1,61 @@
+SUCCESS LOG - IMPORT_MEMBER_TYPES
+Timestamp: 2025-09-06_20-09-56
+CSV File: data/2025_09_02/cleaned/current_member_types.csv
+================================================================================
+
+SUCCESS #1
+File: current_member_types.csv
+Row: 2
+Result: Created member type: Couple
+Created: Couple ($40.0/month)
+------------------------------
+
+SUCCESS #2
+File: current_member_types.csv
+Row: 3
+Result: Created member type: FarAway Friends
+Created: FarAway Friends ($20.0/month)
+------------------------------
+
+SUCCESS #3
+File: current_member_types.csv
+Row: 4
+Result: Created member type: Fixed/Income
+Created: Fixed/Income ($20.0/month)
+------------------------------
+
+SUCCESS #4
+File: current_member_types.csv
+Row: 5
+Result: Created member type: 500 Club
+Created: 500 Club ($500.0/month)
+------------------------------
+
+SUCCESS #5
+File: current_member_types.csv
+Row: 6
+Result: Created member type: Honorary
+Created: Honorary ($0.0/month)
+------------------------------
+
+SUCCESS #6
+File: current_member_types.csv
+Row: 7
+Result: Created member type: Life
+Created: Life ($3000.0/month)
+------------------------------
+
+SUCCESS #7
+File: current_member_types.csv
+Row: 8
+Result: Created member type: Regular
+Created: Regular ($30.0/month)
+------------------------------
+
+SUCCESS #8
+File: current_member_types.csv
+Row: 9
+Result: Created member type: Senior
+Created: Senior ($20.0/month)
+------------------------------
+

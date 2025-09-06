@@ -1,5 +1,5 @@
 import csv
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_date
 
 from members.models import Member, MemberType
+from .import_logger import ImportLogger
 
 
 class Command(BaseCommand):
@@ -57,7 +58,7 @@ class Command(BaseCommand):
                 )
 
                 self.stdout.write(
-                    self.style.SUCCESS(f"\n✅ Member import completed successfully!")
+                    self.style.SUCCESS("\n✅ Member import completed successfully!")
                 )
                 self.stdout.write(f"   👥 Active members imported: {active_count}")
                 self.stdout.write(f"   💀 Inactive members imported: {inactive_count}")
@@ -71,43 +72,44 @@ class Command(BaseCommand):
         """Import active members from current_members.csv"""
         self.stdout.write(f"\n👥 Importing ACTIVE members from: {csv_file}")
 
+        # Initialize enhanced logger
+        logger = ImportLogger("import_active_members", csv_file)
+
         with open(csv_file, "r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
-
-            created_count = 0
-            errors = []
 
             for row_num, row in enumerate(reader, 2):  # Start at 2 (after header)
                 try:
                     member = self.create_member_from_row(
-                        row, row_num, errors, is_active=True
+                        row, row_num, logger, is_active=True
                     )
                     if member:
-                        created_count += 1
-                        if created_count <= 5:  # Show first 5
+                        logger.log_success(
+                            row_num,
+                            f"Created active member: {member.full_name} (ID: {member.member_id})",
+                            member,
+                        )
+                        if logger.created_count <= 5:  # Show first 5
                             self.stdout.write(f"   ✅ Created: {member}")
 
                 except Exception as e:
-                    errors.append(f"Row {row_num}: Unexpected error - {e}")
+                    logger.log_error(row_num, f"Unexpected error - {e}", row)
 
-        self.stdout.write(f"   📊 Active members processed: {created_count}")
-        if errors:
-            self.stdout.write(f"   ❌ Errors: {len(errors)}")
-            for error in errors[:5]:  # Show first 5 errors
-                self.stdout.write(f"      {error}")
+        # Write detailed logs
+        logger.write_summary()
+        logger.print_console_summary(self.stdout)
 
-        return created_count
+        return logger.created_count
 
     def import_inactive_members(self, csv_file):
         """Import inactive members from current_dead.csv"""
         self.stdout.write(f"\n💀 Importing INACTIVE members from: {csv_file}")
 
+        # Initialize enhanced logger
+        logger = ImportLogger("import_inactive_members", csv_file)
+
         with open(csv_file, "r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
-
-            created_count = 0
-            duplicates_count = 0
-            errors = []
 
             for row_num, row in enumerate(reader, 2):  # Start at 2 (after header)
                 try:
@@ -118,35 +120,39 @@ class Command(BaseCommand):
                     if Member.objects.filter(
                         first_name__iexact=first_name, last_name__iexact=last_name
                     ).exists():
-                        duplicates_count += 1
-                        if duplicates_count <= 5:  # Show first 5 duplicates
+                        logger.log_duplicate(
+                            row_num,
+                            f"Member already exists: {first_name} {last_name}",
+                            row,
+                        )
+                        if logger.duplicate_count <= 5:  # Show first 5 duplicates
                             self.stdout.write(
                                 f"   ⚠️  Duplicate skipped: {first_name} {last_name}"
                             )
                         continue
 
                     member = self.create_member_from_row(
-                        row, row_num, errors, is_active=False
+                        row, row_num, logger, is_active=False
                     )
                     if member:
-                        created_count += 1
-                        if created_count <= 5:  # Show first 5
+                        logger.log_success(
+                            row_num,
+                            f"Created inactive member: {member.full_name} (Preferred ID: {member.preferred_member_id})",
+                            member,
+                        )
+                        if logger.created_count <= 5:  # Show first 5
                             self.stdout.write(f"   ✅ Created: {member}")
 
                 except Exception as e:
-                    errors.append(f"Row {row_num}: Unexpected error - {e}")
+                    logger.log_error(row_num, f"Unexpected error - {e}", row)
 
-        self.stdout.write(f"   📊 Inactive members processed: {created_count}")
-        if duplicates_count > 5:
-            self.stdout.write(f"   ⚠️  Total duplicates skipped: {duplicates_count}")
-        if errors:
-            self.stdout.write(f"   ❌ Errors: {len(errors)}")
-            for error in errors[:5]:  # Show first 5 errors
-                self.stdout.write(f"      {error}")
+        # Write detailed logs
+        logger.write_summary({"Total duplicates skipped": logger.duplicate_count})
+        logger.print_console_summary(self.stdout)
 
-        return created_count, duplicates_count
+        return logger.created_count, logger.duplicate_count
 
-    def create_member_from_row(self, row, row_num, errors, is_active=True):
+    def create_member_from_row(self, row, row_num, logger, is_active=True):
         """Create a member from CSV row data"""
         # Required fields
         first_name = row.get("first_name", "").strip()
@@ -154,29 +160,31 @@ class Command(BaseCommand):
         member_type_name = row.get("member_type", "").strip()
 
         if not first_name or not last_name:
-            errors.append(f"Row {row_num}: Missing first_name or last_name")
+            logger.log_error(row_num, "Missing first_name or last_name", row)
             return None
 
         if not member_type_name:
-            errors.append(f"Row {row_num}: Missing member_type")
+            logger.log_error(row_num, "Missing member_type", row)
             return None
 
         # Get member type
         try:
             member_type = MemberType.objects.get(member_type=member_type_name)
         except MemberType.DoesNotExist:
-            errors.append(f"Row {row_num}: Member type '{member_type_name}' not found")
+            logger.log_error(
+                row_num, f"Member type '{member_type_name}' not found", row
+            )
             return None
 
         # Parse dates
         date_joined = parse_date(row.get("date_joined", ""))
         if not date_joined:
-            errors.append(f"Row {row_num}: Invalid or missing date_joined")
+            logger.log_error(row_num, "Invalid or missing date_joined", row)
             return None
 
         expiration_date = parse_date(row.get("expiration_date", ""))
         if not expiration_date:
-            errors.append(f"Row {row_num}: Invalid or missing expiration_date")
+            logger.log_error(row_num, "Invalid or missing expiration_date", row)
             return None
 
         milestone_date = None

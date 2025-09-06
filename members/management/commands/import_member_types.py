@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from members.models import MemberType
+from .import_logger import ImportLogger
 
 
 class Command(BaseCommand):
@@ -51,27 +52,28 @@ class Command(BaseCommand):
         """Import member types from CSV file"""
         self.stdout.write(f"\n🏷️  Importing member types from: {csv_file}")
 
+        # Initialize enhanced logger
+        logger = ImportLogger("import_member_types", csv_file)
+
         with open(csv_file, "r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
-
-            created_count = 0
-            error_count = 0
-            errors = []
 
             for row_num, row in enumerate(reader, 2):  # Start at 2 (after header)
                 try:
                     # Required fields
                     member_type = row.get("member_type", "").strip()
                     if not member_type:
-                        errors.append(f"Row {row_num}: Missing member_type")
+                        logger.log_error(row_num, "Missing member_type", row)
                         continue
 
                     # Parse member_dues
                     try:
                         member_dues = Decimal(str(row["member_dues"]).strip())
                     except (ValueError, TypeError):
-                        errors.append(
-                            f"Row {row_num}: Invalid member_dues '{row.get('member_dues')}'"
+                        logger.log_error(
+                            row_num,
+                            f"Invalid member_dues '{row.get('member_dues')}'",
+                            row,
                         )
                         continue
 
@@ -79,8 +81,10 @@ class Command(BaseCommand):
                     try:
                         num_months = int(row["num_months"])
                     except (ValueError, TypeError):
-                        errors.append(
-                            f"Row {row_num}: Invalid num_months '{row.get('num_months')}'"
+                        logger.log_error(
+                            row_num,
+                            f"Invalid num_months '{row.get('num_months')}'",
+                            row,
                         )
                         continue
 
@@ -94,22 +98,25 @@ class Command(BaseCommand):
                     )
 
                     if created:
-                        created_count += 1
-                        self.stdout.write(f"   ✅ Created: {member_type_obj}")
+                        logger.log_success(
+                            row_num,
+                            f"Created member type: {member_type}",
+                            member_type_obj,
+                        )
+                        if logger.created_count <= 5:  # Show first 5 on console
+                            self.stdout.write(f"   ✅ Created: {member_type_obj}")
                     else:
-                        self.stdout.write(f"   ⚠️  Exists: {member_type_obj}")
+                        logger.log_skipped(
+                            row_num, f"Member type already exists: {member_type}", row
+                        )
+                        if logger.skipped_count <= 5:  # Show first 5 on console
+                            self.stdout.write(f"   ⚠️  Exists: {member_type_obj}")
 
                 except Exception as e:
-                    errors.append(f"Row {row_num}: Unexpected error - {e}")
-                    error_count += 1
+                    logger.log_error(row_num, f"Unexpected error - {e}", row)
 
-        # Show summary
-        self.stdout.write("\n📊 Import Summary:")
-        self.stdout.write(f"   🏷️  Member types created: {created_count}")
-        self.stdout.write(f"   ❌ Errors: {len(errors)}")
+        # Write detailed logs to files
+        logger.write_summary()
 
-        # Show errors if any
-        if errors:
-            self.stdout.write("\n❌ Errors encountered:")
-            for error in errors:
-                self.stdout.write(f"   {error}")
+        # Show console summary
+        logger.print_console_summary(self.stdout)

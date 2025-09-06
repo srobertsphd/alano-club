@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from members.models import PaymentMethod
+from .import_logger import ImportLogger
 
 
 class Command(BaseCommand):
@@ -50,19 +51,18 @@ class Command(BaseCommand):
         """Import payment methods from CSV file"""
         self.stdout.write(f"\n💳 Importing payment methods from: {csv_file}")
 
+        # Initialize enhanced logger
+        logger = ImportLogger("import_payment_methods", csv_file)
+
         with open(csv_file, "r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
-
-            created_count = 0
-            error_count = 0
-            errors = []
 
             for row_num, row in enumerate(reader, 2):  # Start at 2 (after header)
                 try:
                     # Required field
                     payment_method = row.get("payment_method", "").strip()
                     if not payment_method:
-                        errors.append(f"Row {row_num}: Missing payment_method")
+                        logger.log_error(row_num, "Missing payment_method", row)
                         continue
 
                     # Create or get payment method
@@ -71,22 +71,27 @@ class Command(BaseCommand):
                     )
 
                     if created:
-                        created_count += 1
-                        self.stdout.write(f"   ✅ Created: {payment_method_obj}")
+                        logger.log_success(
+                            row_num,
+                            f"Created payment method: {payment_method}",
+                            payment_method_obj,
+                        )
+                        if logger.created_count <= 5:
+                            self.stdout.write(f"   ✅ Created: {payment_method_obj}")
                     else:
-                        self.stdout.write(f"   ⚠️  Exists: {payment_method_obj}")
+                        logger.log_skipped(
+                            row_num,
+                            f"Payment method already exists: {payment_method}",
+                            row,
+                        )
+                        if logger.skipped_count <= 5:
+                            self.stdout.write(f"   ⚠️  Exists: {payment_method_obj}")
 
                 except Exception as e:
-                    errors.append(f"Row {row_num}: Unexpected error - {e}")
-                    error_count += 1
+                    logger.log_error(row_num, f"Unexpected error - {e}", row)
 
-        # Show summary
-        self.stdout.write("\n📊 Import Summary:")
-        self.stdout.write(f"   💳 Payment methods created: {created_count}")
-        self.stdout.write(f"   ❌ Errors: {len(errors)}")
+        # Write detailed logs to files
+        logger.write_summary()
 
-        # Show errors if any
-        if errors:
-            self.stdout.write("\n❌ Errors encountered:")
-            for error in errors:
-                self.stdout.write(f"   {error}")
+        # Show console summary
+        logger.print_console_summary(self.stdout)

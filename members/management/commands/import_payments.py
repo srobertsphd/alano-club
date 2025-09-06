@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_date
 
 from members.models import Member, PaymentMethod, Payment
+from .import_logger import ImportLogger
 
 
 class Command(BaseCommand):
@@ -51,25 +52,28 @@ class Command(BaseCommand):
         """Import payments from CSV file"""
         self.stdout.write(f"\n💰 Importing payments from: {csv_file}")
 
+        # Initialize enhanced logger
+        logger = ImportLogger("import_payments", csv_file)
+
         with open(csv_file, "r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
-
-            created_count = 0
-            errors = []
 
             for row_num, row in enumerate(reader, 2):  # Start at 2 (after header)
                 try:
                     # Skip rows without payment data
                     if not row.get("payment_amount") or not row.get("payment_date"):
+                        logger.log_skipped(
+                            row_num, "Missing payment_amount or payment_date", row
+                        )
                         continue
 
                     # 1. Find member by member_id first, then by name as fallback
-                    member = self.find_member(row, row_num, errors)
+                    member = self.find_member(row, row_num, logger)
                     if not member:
                         continue
 
                     # 2. Find payment method
-                    payment_method = self.find_payment_method(row, row_num, errors)
+                    payment_method = self.find_payment_method(row, row_num, logger)
                     if not payment_method:
                         continue
 
@@ -77,16 +81,20 @@ class Command(BaseCommand):
                     try:
                         amount = Decimal(str(row["payment_amount"]).strip())
                     except (ValueError, TypeError):
-                        errors.append(
-                            f"Row {row_num}: Invalid payment amount '{row.get('payment_amount')}'"
+                        logger.log_error(
+                            row_num,
+                            f"Invalid payment amount '{row.get('payment_amount')}'",
+                            row,
                         )
                         continue
 
                     # 4. Parse payment date
                     payment_date = parse_date(row["payment_date"])
                     if not payment_date:
-                        errors.append(
-                            f"Row {row_num}: Invalid payment date '{row.get('payment_date')}'"
+                        logger.log_error(
+                            row_num,
+                            f"Invalid payment date '{row.get('payment_date')}'",
+                            row,
                         )
                         continue
 
@@ -99,7 +107,12 @@ class Command(BaseCommand):
                     ).first()
 
                     if existing_payment:
-                        if created_count <= 5:  # Show first 5 duplicates
+                        logger.log_duplicate(
+                            row_num,
+                            f"Payment already exists: ${amount} on {payment_date} for {member.full_name}",
+                            row,
+                        )
+                        if logger.duplicate_count <= 5:  # Show first 5 duplicates
                             self.stdout.write(
                                 f"   ⚠️  Duplicate skipped: ${amount} on {payment_date} for {member.full_name}"
                             )
@@ -112,30 +125,25 @@ class Command(BaseCommand):
                             date=payment_date,
                             receipt_number=receipt_number,
                         )
-                        created_count += 1
+                        logger.log_success(
+                            row_num,
+                            f"Created payment: ${amount} on {payment_date} for {member.full_name}",
+                            payment,
+                        )
 
-                        if created_count <= 5:  # Show first 5 created
+                        if logger.created_count <= 5:  # Show first 5 created
                             self.stdout.write(f"   ✅ Created: {payment}")
 
                 except Exception as e:
-                    errors.append(f"Row {row_num}: Unexpected error - {e}")
+                    logger.log_error(row_num, f"Unexpected error - {e}", row)
 
-        # Show summary
-        self.stdout.write("\n📊 Import Summary:")
-        self.stdout.write(f"   💰 Payments processed: {created_count}")
-        self.stdout.write(f"   ❌ Errors: {len(errors)}")
+        # Write detailed logs
+        logger.write_summary({"Total duplicates skipped": logger.duplicate_count})
+        logger.print_console_summary(self.stdout)
 
-        # Show errors if any
-        if errors:
-            self.stdout.write("\n❌ Errors encountered:")
-            for error in errors[:10]:  # Show first 10 errors
-                self.stdout.write(f"   {error}")
-            if len(errors) > 10:
-                self.stdout.write(f"   ... and {len(errors) - 10} more errors")
+        return logger.created_count
 
-        return created_count
-
-    def find_member(self, row, row_num, errors):
+    def find_member(self, row, row_num, logger):
         """Find member by member_id first, then by name"""
         member_id = row.get("member_id")
         first_name = row.get("first_name", "").strip()
@@ -161,19 +169,19 @@ class Command(BaseCommand):
                 return member
 
         # Member not found
-        error_msg = f"Row {row_num}: Member not found - "
+        error_msg = "Member not found - "
         if member_id:
             error_msg += f"ID: {member_id}, "
         error_msg += f"Name: {first_name} {last_name}"
-        errors.append(error_msg)
+        logger.log_error(row_num, error_msg, row)
         return None
 
-    def find_payment_method(self, row, row_num, errors):
+    def find_payment_method(self, row, row_num, logger):
         """Find payment method by name"""
         payment_method_name = row.get("payment_method", "").strip()
 
         if not payment_method_name:
-            errors.append(f"Row {row_num}: Missing payment_method")
+            logger.log_error(row_num, "Missing payment_method", row)
             return None
 
         try:
@@ -182,8 +190,10 @@ class Command(BaseCommand):
             )
             return payment_method
         except PaymentMethod.DoesNotExist:
-            errors.append(
-                f"Row {row_num}: Payment method '{payment_method_name}' not found"
+            logger.log_error(
+                row_num,
+                f"Payment method '{payment_method_name}' not found",
+                row,
             )
             return None
         except PaymentMethod.MultipleObjectsReturned:
