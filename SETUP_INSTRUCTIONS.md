@@ -540,3 +540,229 @@ The Django Admin interface provides:
 - User permissions management
 
 This replaces complex desktop applications with a simple web interface accessible from any device.
+
+## 16. Member ID Management API - Usage Guide
+
+### **Overview**
+The Member model includes a custom MemberManager with methods for handling the recyclable member ID system (1-1000 range) and member lifecycle operations.
+
+### **Manager Methods (Class-Level Operations)**
+
+#### **A. ID Management**
+
+```python
+# Get next available member ID
+next_id = Member.objects.get_next_available_id()
+# Returns: 1, 2, 3... or None if all IDs taken
+
+# Check if specific ID is available
+is_free = Member.objects.is_member_id_available(123)
+# Returns: True/False
+
+# Get all active member IDs (sorted)
+active_ids = Member.objects.get_active_member_ids()
+# Returns: [1, 2, 5, 7, 123, ...]
+
+# Get all available member IDs
+available_ids = Member.objects.get_available_member_ids()
+# Returns: [3, 4, 6, 8, 9, ...]
+```
+
+#### **B. Member Lookup & Creation**
+
+```python
+# Find inactive member for reactivation
+member = Member.objects.get_member_for_reactivation("John", "Doe")
+# Returns: Member instance or None
+
+# Create new member with auto-assigned ID
+member = Member.objects.create_new_member(
+    first_name="Jane",
+    last_name="Smith",
+    member_type=member_type_obj,
+    date_joined=date.today(),
+    expiration_date=date(2025, 12, 31),
+    status="active"
+)
+# Auto-assigns member_id and sets preferred_member_id
+
+# Find members due for deactivation (3+ months expired)
+expired_members = Member.objects.get_expired_for_deactivation()
+# Returns: QuerySet of expired active members
+```
+
+### **Instance Methods (Individual Member Operations)**
+
+#### **A. Expiration Checking**
+
+```python
+member = Member.objects.get(member_id=123)
+
+# Check if expired 3+ months (eligible for deactivation)
+if member.is_expired_for_deactivation():
+    print("Member should be deactivated")
+
+# Check if membership has expired (any amount)
+if member.is_membership_expired():
+    print("Membership has expired")
+```
+
+#### **B. Member Lifecycle Management**
+
+```python
+# Deactivate a member (releases ID for recycling)
+member.deactivate()
+# Result: member_id=None, preferred_member_id=123, status='inactive'
+
+# Reactivate a member (tries to restore preferred ID)
+member.reactivate()
+# Result: member_id=123 (if available) or next available, status='active'
+```
+
+### **Usage Examples for Common Scenarios**
+
+#### **Scenario 1: Creating New Members**
+
+```python
+# In your views or admin
+def create_new_member_view(request):
+    if request.method == 'POST':
+        # Create member with auto-assigned ID
+        member = Member.objects.create_new_member(
+            first_name=request.POST['first_name'],
+            last_name=request.POST['last_name'],
+            member_type=MemberType.objects.get(member_type="Regular"),
+            date_joined=date.today(),
+            expiration_date=date(2025, 12, 31),
+            email=request.POST.get('email', ''),
+            home_phone=request.POST.get('phone', ''),
+        )
+        
+        messages.success(request, f"Member created with ID #{member.member_id}")
+        return redirect('member_detail', member.member_uuid)
+```
+
+#### **Scenario 2: Member Reactivation**
+
+```python
+# In your admin or management command
+def reactivate_member_by_name(first_name, last_name):
+    member = Member.objects.get_member_for_reactivation(first_name, last_name)
+    
+    if member:
+        old_id = member.preferred_member_id
+        member.reactivate()
+        
+        if member.member_id == old_id:
+            print(f"✅ {member.full_name} reactivated with original ID #{old_id}")
+        else:
+            print(f"⚠️ {member.full_name} reactivated with new ID #{member.member_id} (#{old_id} was taken)")
+    else:
+        print(f"❌ No inactive member found: {first_name} {last_name}")
+```
+
+#### **Scenario 3: Bulk Deactivation (Management Command)**
+
+```python
+# In a management command for expired member cleanup
+class Command(BaseCommand):
+    def handle(self, *args, **options):
+        expired_members = Member.objects.get_expired_for_deactivation()
+        
+        for member in expired_members:
+            old_id = member.member_id
+            member.deactivate()
+            self.stdout.write(
+                f"Deactivated: {member.full_name} (ID #{old_id} released)"
+            )
+        
+        self.stdout.write(f"Deactivated {expired_members.count()} members")
+```
+
+#### **Scenario 4: ID Availability Dashboard**
+
+```python
+# For admin dashboard showing ID usage
+def member_id_stats():
+    active_ids = Member.objects.get_active_member_ids()
+    available_ids = Member.objects.get_available_member_ids()
+    
+    stats = {
+        'total_possible': 1000,
+        'active_count': len(active_ids),
+        'available_count': len(available_ids),
+        'utilization_percent': (len(active_ids) / 1000) * 100,
+        'next_available': available_ids[0] if available_ids else None,
+        'active_range': f"{min(active_ids)} - {max(active_ids)}" if active_ids else "None"
+    }
+    
+    return stats
+```
+
+#### **Scenario 5: Member ID Conflict Resolution**
+
+```python
+# When manually assigning a specific ID
+def assign_specific_member_id(member, desired_id):
+    if Member.objects.is_member_id_available(desired_id):
+        member.member_id = desired_id
+        member.preferred_member_id = desired_id
+        member.save()
+        return True, f"Assigned ID #{desired_id}"
+    else:
+        next_id = Member.objects.get_next_available_id()
+        member.member_id = next_id
+        member.save()
+        return False, f"ID #{desired_id} taken, assigned #{next_id} instead"
+```
+
+### **Django Admin Integration**
+
+```python
+# In members/admin.py
+@admin.action(description="Reactivate selected inactive members")
+def reactivate_members(modeladmin, request, queryset):
+    for member in queryset.filter(status='inactive'):
+        member.reactivate()
+    
+    messages.success(request, f"Reactivated {queryset.count()} members")
+
+@admin.action(description="Deactivate expired members")
+def deactivate_expired(modeladmin, request, queryset):
+    for member in queryset.filter(status='active'):
+        if member.is_expired_for_deactivation():
+            member.deactivate()
+```
+
+### **Error Handling**
+
+```python
+# Always check for None returns
+next_id = Member.objects.get_next_available_id()
+if next_id is None:
+    # All 1000 IDs are taken - handle appropriately
+    raise ValueError("No member IDs available (1000 limit reached)")
+
+# Handle reactivation failures gracefully
+member = Member.objects.get_member_for_reactivation("John", "Doe")
+if member is None:
+    # No inactive member found with that name
+    return "Member not found or already active"
+```
+
+### **Performance Considerations**
+
+- **ID lookup queries are optimized** with database indexes on `member_id` and `status`
+- **Bulk operations** use QuerySets rather than individual database hits
+- **Manager methods cache active IDs** for multiple operations
+- **Use `select_related()`** when accessing member types or payment methods
+
+### **Best Practices**
+
+1. **Always use manager methods** for ID operations rather than manual queries
+2. **Check availability** before manually assigning specific IDs
+3. **Use bulk operations** for processing multiple members
+4. **Handle edge cases** like no available IDs or member not found
+5. **Log ID changes** for audit trails in production
+
+This API provides complete control over the member ID lifecycle while maintaining data integrity and supporting the club's specific business requirements.

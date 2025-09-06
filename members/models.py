@@ -4,54 +4,112 @@ from django.utils import timezone
 
 
 class MemberType(models.Model):
-    """Different types of membership with dues and coverage periods"""
+    """Simple membership types lookup table"""
 
-    member_type_id = models.IntegerField(primary_key=True)  # From CSV: MemberTypeID
-    name = models.CharField(max_length=50, unique=True)  # From CSV: MemberType
-    monthly_dues = models.DecimalField(
+    member_type = models.CharField(max_length=50, unique=True)  # From CSV: member_type
+    member_dues = models.DecimalField(
         max_digits=8, decimal_places=2
-    )  # From CSV: Member Dues
-    coverage_months = models.DecimalField(
-        max_digits=5, decimal_places=1
-    )  # From CSV: NumMonths
-    description = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
+    )  # From CSV: member_dues
+    num_months = models.IntegerField()  # From CSV: num_months
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["member_type"]
         db_table = "members_membertype"
 
     def __str__(self):
-        return f"{self.name} (${self.monthly_dues}/month)"
+        return f"{self.member_type} (${self.member_dues}/month)"
 
 
 class PaymentMethod(models.Model):
-    """Payment methods with credit card designation"""
+    """Simple payment methods lookup table"""
 
-    payment_method_id = models.IntegerField(
-        primary_key=True
-    )  # From CSV: PaymentMethodID
-    name = models.CharField(max_length=50, unique=True)  # From CSV: PaymentMethod
-    is_credit_card = models.BooleanField(default=False)  # From CSV: Credit Card?
-    is_active = models.BooleanField(default=True)
+    payment_method = models.CharField(
+        max_length=50, unique=True
+    )  # From CSV: payment_method
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["payment_method"]
         db_table = "members_paymentmethod"
 
     def __str__(self):
-        return self.name
+        return self.payment_method
+
+
+class MemberManager(models.Manager):
+    """Custom manager for Member ID management and member operations"""
+
+    def get_next_available_id(self):
+        """Get the next available member ID (1-1000)"""
+        # Get all active member IDs
+        active_ids = set(
+            self.filter(status="active", member_id__isnull=False).values_list(
+                "member_id", flat=True
+            )
+        )
+
+        # Find first available ID in range 1-1000
+        for id_num in range(1, 1001):
+            if id_num not in active_ids:
+                return id_num
+
+        return None  # No IDs available
+
+    def is_member_id_available(self, member_id):
+        """Check if a specific member_id is available for assignment"""
+        return not self.filter(member_id=member_id, status="active").exists()
+
+    def get_active_member_ids(self):
+        """Get sorted list of all currently active member IDs"""
+        return list(
+            self.filter(member_id__isnull=False, status="active")
+            .values_list("member_id", flat=True)
+            .order_by("member_id")
+        )
+
+    def get_available_member_ids(self):
+        """Get sorted list of all available member IDs (1-1000)"""
+        active_ids = set(self.get_active_member_ids())
+        return [i for i in range(1, 1001) if i not in active_ids]
+
+    def get_expired_for_deactivation(self):
+        """Get members who are expired 3+ months and should be deactivated"""
+        from datetime import date, timedelta
+
+        three_months_ago = date.today() - timedelta(days=90)
+        return self.filter(status="active", expiration_date__lt=three_months_ago)
+
+    def get_member_for_reactivation(self, first_name, last_name):
+        """Find inactive member by name for reactivation"""
+        return self.filter(
+            first_name__iexact=first_name,
+            last_name__iexact=last_name,
+            status="inactive",
+        ).first()
+
+    def create_new_member(self, **kwargs):
+        """Create new member with auto-assigned member_id"""
+        member = self.create(**kwargs)
+        if member.status == "active":
+            member.member_id = self.get_next_available_id()
+            member.preferred_member_id = member.member_id
+            member.save()
+        return member
 
 
 class Member(models.Model):
     """Main member information with dual key system"""
+
+    # Custom manager for ID management
+    objects = MemberManager()
 
     # Dual Key System (Setup Instructions)
     member_uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)  # PERMANENT ID
     member_id = models.IntegerField(
         null=True, blank=True, unique=True
     )  # RECYCLABLE (1-1000)
-    preferred_member_id = models.IntegerField()  # For reinstatement
+    preferred_member_id = models.IntegerField(
+        null=True, blank=True
+    )  # For reinstatement
 
     # Basic Information (CSV: members.csv)
     first_name = models.CharField(max_length=50)  # "First Name"
@@ -78,12 +136,12 @@ class Member(models.Model):
     date_joined = models.DateField()  # "Date Joined" - Club membership start
     date_inactivated = models.DateField(null=True, blank=True)
 
-    # Contact Information (CSV: members.csv)
-    home_address = models.TextField(blank=True)  # "Home Address"
-    home_country = models.CharField(
-        max_length=50, blank=True, default="US"
-    )  # "Home Country"
-    home_phone = models.CharField(max_length=20, blank=True)  # "Home Phone"
+    # Contact Information (CSV: current_members.csv)
+    home_address = models.TextField(blank=True)  # "home_address"
+    home_city = models.CharField(max_length=100, blank=True)  # "home_city"
+    home_state = models.CharField(max_length=2, blank=True)  # "home_state"
+    home_zip = models.CharField(max_length=10, blank=True)  # "home_zip"
+    home_phone = models.CharField(max_length=20, blank=True)  # "home_phone"
 
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -111,22 +169,38 @@ class Member(models.Model):
         """Check if membership has expired"""
         return self.expiration_date < timezone.now().date()
 
-    @classmethod
-    def get_next_available_member_id(cls):
-        """Get the next available member ID (1-1000)"""
-        # Get all active member IDs
-        active_ids = set(
-            cls.objects.filter(status="active", member_id__isnull=False).values_list(
-                "member_id", flat=True
-            )
-        )
+    def is_expired_for_deactivation(self):
+        """Check if member is expired 3+ months and should be deactivated"""
+        from datetime import date, timedelta
 
-        # Find first available ID in range 1-1000
-        for id_num in range(1, 1001):
-            if id_num not in active_ids:
-                return id_num
+        if self.expiration_date:
+            three_months_ago = date.today() - timedelta(days=90)
+            return self.expiration_date < three_months_ago
+        return False
 
-        return None  # No IDs available
+    def deactivate(self):
+        """Move member to inactive status and release member_id for recycling"""
+        if self.member_id:
+            self.preferred_member_id = self.member_id  # Save for reactivation
+            self.member_id = None  # Release ID back to pool
+        self.status = "inactive"
+        self.date_inactivated = timezone.now().date()
+        self.save()
+
+    def reactivate(self):
+        """Reactivate member, trying to restore preferred_member_id"""
+        # Try to get preferred ID first
+        if self.preferred_member_id and Member.objects.is_member_id_available(
+            self.preferred_member_id
+        ):
+            self.member_id = self.preferred_member_id
+        else:
+            # Get next available ID
+            self.member_id = Member.objects.get_next_available_id()
+
+        self.status = "active"
+        self.date_inactivated = None
+        self.save()
 
 
 class Payment(models.Model):
@@ -134,9 +208,6 @@ class Payment(models.Model):
 
     # Auto-assigned primary key (Django standard)
     id = models.AutoField(primary_key=True)
-
-    # Original CSV Payment ID for reference
-    original_payment_id = models.IntegerField()  # From CSV: Payment ID
 
     # Relationships (CRITICAL: UUID not member_id!)
     member = models.ForeignKey(
