@@ -3,7 +3,7 @@
 ## Members Data Processing
 
 ### Data Source
-- **File**: `data/new_data/2025_09_02_Members-Data.xlsx`
+- **File**: `data/2025_09_02/excel_files/2025_09_02_Members-Data.xlsx`
 - **Read using**: pandas `read_excel()`
 
 ### Data Transformations
@@ -71,21 +71,21 @@
 
 | member_type     | member_dues | num_months | count |
 |----------------|-------------|------------|-------|
-| Couple         | 40.0        | 1.0        | 26    |
-| FarAway Friends| 20.0        | 1.0        | 14    |
-| Fixed/Income   | 20.0        | 1.0        | 93    |
-| 500 Club       | 500.0       | 12.0       | 0     |
-| Honorary       | 0.0         | 1.0        | 0     |
-| Life           | 3000.0      | 300.0      | 43    |
-| Regular        | 30.0        | 1.0        | 49    |
-| Senior         | 20.0        | 1.0        | 110   |
+| Couple         | 40.0        | 1        | 26    |
+| FarAway Friends| 20.0        | 1        | 14    |
+| Fixed/Income   | 20.0        | 1        | 93    |
+| 500 Club       | 500.0       | 12       | 0     |
+| Honorary       | 0.0         | 1        | 0     |
+| Life           | 3000.0      | 300      | 43    |
+| Regular        | 30.0        | 1        | 49    |
+| Senior         | 20.0        | 1        | 110   |
 
 *Note: Life membership duration is 300 months (25 years)*
 
 ## Member Payments Data Processing
 
 ### Data Source
-- **File**: `data/new_data/2025_09_02_Member Payments.xlsx`
+- **File**: `data/2025_09_02/excel_files/2025_09_02_Member Payments.xlsx`
 - **Read using**: pandas `read_excel()`
 
 ### Data Transformations
@@ -143,7 +143,7 @@
 ## Dead Members Data Processing
 
 ### Data Source
-- **File**: `data/new_data/2025_08_26_Dead.xlsx`
+- **File**: `data/2025_09_02/excel_files/2025_08_26_Dead.xlsx`
 - **Read using**: pandas `read_excel()`
 
 ### Data Transformations

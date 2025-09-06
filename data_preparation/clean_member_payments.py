@@ -4,7 +4,9 @@ import pandas as pd
 # Load the data
 ################################################################
 
-payments_df = pd.read_excel("../data/new_data/2025_09_02_Member Payments.xlsx")
+payments_df = pd.read_excel(
+    "../data/2025_09_02/excel_files/2025_09_02_Member Payments.xlsx"
+)
 
 payments_df.info()
 
@@ -92,7 +94,7 @@ payments_df.info()
 # compare to make certain the payment member info matches the member info
 ################################################################
 
-members_df = pd.read_csv("data/current_members.csv")
+members_df = pd.read_csv("../data/2025_09_02/csv_data/current_members.csv")
 
 members_df.info()
 
@@ -166,4 +168,4 @@ payments_df = payments_df.dropna(subset=["payment_amount"])
 # save the cleaned data
 ################################################################
 
-payments_df.to_csv("data/current_payments.csv", index=False)
+payments_df.to_csv("../data/2025_09_02/csv_data/current_payments.csv", index=False)

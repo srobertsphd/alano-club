@@ -22,17 +22,18 @@ source .venv/bin/activate
 ### Package Management
 **Use UV for all package operations:**
 ```bash
-# Install packages
-uv pip install -r requirements.txt
+# Sync packages from pyproject.toml
+uv sync
 
 # Add new packages
-uv pip install package-name
+uv add package-name
 ```
 
 ### Database Connection
 - **Database**: Supabase PostgreSQL
-- **Configuration**: Via `.env` file with `DATABASE_URL`
-- **Connection**: Uses `dj-database-url` for Django integration
+- **Connection Variable**: `DATABASE_URL` (set in `.env` file)
+- **Configuration**: Uses `dj-database-url` for Django integration
+- **Required**: Ensure `DATABASE_URL` is properly configured before running Django commands
 
 ## Development Workflow Preferences
 
@@ -50,12 +51,12 @@ uv pip install package-name
 ## Key Project Files
 - `manage.py` - Django management commands
 - `.env` - Environment variables (DATABASE_URL, SECRET_KEY)
-- `requirements.txt` - Python dependencies
+- `pyproject.toml` - uv project dependencies
 - `members/` - Main app for member management
 - `data/` - Excel/CSV data files for import
 
 ## Data Context
-The project involves importing existing member data from Excel files:
+The project involves importing existing member data from CSV files:
 - Member records (~325)
 - Payment history (~1,337 records)
 - Member types and payment methods
@@ -65,6 +66,7 @@ The project involves importing existing member data from Excel files:
 When implementing new features:
 1. Explain what we're building
 2. Show the command to be executed
-3. Execute step by step
-4. Test the implementation
-5. Verify everything works before moving to next step
+3. Ask for permission to modify the files accordings
+4. Execute step by step
+5. Test the implementation
+6. Verify everything works before moving to next step

@@ -5,7 +5,9 @@ import pandas as pd
 ################################################################
 
 
-members_df = pd.read_excel("../data/new_data/2025_09_02_Members-Data.xlsx")
+members_df = pd.read_excel(
+    "../data/2025_09_02/excel_files/2025_09_02_Members-Data.xlsx"
+)
 
 members_df.info()
 
@@ -154,7 +156,7 @@ check_phone_format(members_df["home_phone"])
 # Save the cleaned data
 ################################################################
 
-members_df.to_csv("data/current_members.csv", index=False)
+members_df.to_csv("../data/2025_09_02/csv_data/current_members.csv", index=False)
 
 ################################################################
 # Show some useful info about the data
