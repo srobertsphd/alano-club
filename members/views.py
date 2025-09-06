@@ -211,34 +211,28 @@ def add_payment_view(request):
             return redirect("members:add_payment")
 
         # Check if this is a Life member - no payments allowed
-        if member.member_type and member.member_type.name == "Life":
+        if member.member_type and member.member_type.member_type == "Life":
             context = {
                 "step": "life_member",
                 "member": member,
             }
             return render(request, "members/add_payment.html", context)
 
-        payment_methods = PaymentMethod.objects.filter(is_active=True).order_by("name")
+        payment_methods = PaymentMethod.objects.all().order_by("payment_method")
 
         # Auto-populate suggested payment amount (monthly dues)
         suggested_amount = (
-            member.member_type.monthly_dues if member.member_type else Decimal("0.00")
+            member.member_type.member_dues if member.member_type else Decimal("0.00")
         )
 
-        # Calculate new expiration date if they pay the monthly amount
-        coverage_months = (
-            float(member.member_type.coverage_months) if member.member_type else 1.0
-        )
-        # Add months and set to last day of month
-        months_to_add = int(coverage_months)
-        new_expiration = add_months_to_date(member.expiration_date, months_to_add)
+        # Don't calculate new expiration here - it will be calculated dynamically
+        # based on the actual payment amount entered by the user
 
         context = {
             "step": "form",
             "member": member,
             "payment_methods": payment_methods,
             "suggested_amount": suggested_amount,
-            "new_expiration": new_expiration,
             "today": timezone.now().date(),
         }
         return render(request, "members/add_payment.html", context)
@@ -261,9 +255,7 @@ def add_payment_view(request):
                     raise ValueError("Cannot add payments for deceased members")
                 amount = Decimal(amount)
                 payment_date = datetime.strptime(payment_date, "%Y-%m-%d").date()
-                payment_method = get_object_or_404(
-                    PaymentMethod, payment_method_id=payment_method_id
-                )
+                payment_method = get_object_or_404(PaymentMethod, pk=payment_method_id)
 
                 # Validate receipt number is provided
                 if not receipt_number:
@@ -274,10 +266,11 @@ def add_payment_view(request):
                 # - $30 payment / $30 monthly dues = 1 month paid
                 # - $60 payment / $30 monthly dues = 2 months paid
                 # - $15 payment / $30 monthly dues = 0.5 months = 0 months (rounded down)
-                if member.member_type and member.member_type.monthly_dues > 0:
-                    months_paid = float(amount) / float(member.member_type.monthly_dues)
-                    coverage_months = float(member.member_type.coverage_months)
-                    total_months_to_add = int(months_paid * coverage_months)
+                if member.member_type and member.member_type.member_dues > 0:
+                    # Calculate how many months the payment covers
+                    # Example: $60 payment / $30 monthly dues = 2 months
+                    months_paid = float(amount) / float(member.member_type.member_dues)
+                    total_months_to_add = int(months_paid)
                     new_expiration = add_months_to_date(
                         member.expiration_date, total_months_to_add
                     )
@@ -333,17 +326,8 @@ def add_payment_view(request):
                     Member, member_uuid=payment_data["member_uuid"]
                 )
                 payment_method = get_object_or_404(
-                    PaymentMethod, payment_method_id=payment_data["payment_method_id"]
+                    PaymentMethod, pk=payment_data["payment_method_id"]
                 )
-
-                # Generate unique original_payment_id (for new payments, use next available ID)
-                max_original_id = (
-                    Payment.objects.aggregate(max_id=Max("original_payment_id"))[
-                        "max_id"
-                    ]
-                    or 0
-                )
-                new_original_id = max_original_id + 1
 
                 # Create the payment record
                 payment = Payment.objects.create(
@@ -352,7 +336,6 @@ def add_payment_view(request):
                     amount=Decimal(payment_data["amount"]),
                     date=datetime.fromisoformat(payment_data["payment_date"]).date(),
                     receipt_number=payment_data["receipt_number"],
-                    original_payment_id=new_original_id,
                 )
 
                 # Update member expiration date and reactivate if inactive

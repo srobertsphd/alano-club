@@ -35,7 +35,7 @@
                 <p class="mb-0 fs-5">
                     <span class="badge badge-status status-{{ member.status|lower }} me-2">{{ member.get_status_display }}</span>
                     {% if member.member_type %}
-                        {{ member.member_type.name }} Member
+                        {{ member.member_type.member_type }} Member
                     {% endif %}
                 </p>
             </div>
@@ -119,7 +119,7 @@
                                     <td>Member Type</td>
                                     <td>
                                         {% if member.member_type %}
-                                            <strong>{{ member.member_type.name }}</strong>
+                                            <strong>{{ member.member_type.member_type }}</strong>
                                         {% else %}
                                             <span class="text-muted">Not assigned</span>
                                         {% endif %}
@@ -237,10 +237,7 @@
                                         </td>
                                         <td>
                                             {% if payment.payment_method %}
-                                                {{ payment.payment_method.name }}
-                                                {% if payment.payment_method.is_credit_card %}
-                                                    <i class="bi bi-credit-card text-info ms-1"></i>
-                                                {% endif %}
+                                                {{ payment.payment_method.payment_method }}
                                             {% else %}
                                                 <span class="text-muted">Unknown</span>
                                             {% endif %}
