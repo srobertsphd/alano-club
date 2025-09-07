@@ -73,6 +73,20 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'add_payment' %}active{% endif %}" 
+                       href="{% url 'members:add_payment' %}">
+                        <i class="bi bi-cash-coin me-2"></i>
+                        Add Payment
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'add_member' %}active{% endif %}" 
+                       href="{% url 'members:add_member' %}">
+                        <i class="bi bi-person-plus me-2"></i>
+                        Add Member
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
                         <i class="bi bi-file-text me-2"></i>
                         Reports
@@ -86,20 +100,6 @@
                     </a>
                 </li>
                 {% endif %}
-                <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'add_member' %}active{% endif %}" 
-                       href="{% url 'members:add_member' %}">
-                        <i class="bi bi-person-plus me-2"></i>
-                        Add Member
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'add_payment' %}active{% endif %}" 
-                       href="{% url 'members:add_payment' %}">
-                        <i class="bi bi-cash-coin me-2"></i>
-                        Add Payment
-                    </a>
-                </li>
             </ul>
         </div>
     </div>
@@ -125,6 +125,20 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'add_payment' %}active{% endif %}" 
+                               href="{% url 'members:add_payment' %}">
+                                <i class="bi bi-cash-coin me-2"></i>
+                                Add Payment
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'add_member' %}active{% endif %}" 
+                               href="{% url 'members:add_member' %}">
+                                <i class="bi bi-person-plus me-2"></i>
+                                Add Member
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
                                 <i class="bi bi-file-text me-2"></i>
                                 Reports
@@ -138,20 +152,6 @@
                             </a>
                         </li>
                         {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'add_member' %}active{% endif %}" 
-                               href="{% url 'members:add_member' %}">
-                                <i class="bi bi-person-plus me-2"></i>
-                                Add Member
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'add_payment' %}active{% endif %}" 
-                               href="{% url 'members:add_payment' %}">
-                                <i class="bi bi-cash-coin me-2"></i>
-                                Add Payment
-                            </a>
-                        </li>
                     </ul>
                 </div>
             </nav>
