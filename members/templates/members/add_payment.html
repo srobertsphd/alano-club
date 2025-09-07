@@ -211,8 +211,8 @@
                                                    class="form-control" 
                                                    id="amount" 
                                                    name="amount" 
-                                                   step="{{ suggested_amount }}" 
-                                                   min="{{ suggested_amount }}" 
+                                                   step="any" 
+                                                   min="0.01" 
                                                    value="{{ suggested_amount }}" 
                                                    data-monthly-dues="{{ suggested_amount }}"
                                                    data-current-expiration="{{ member.expiration_date|date:'Y-m-d' }}"
@@ -224,7 +224,10 @@
                                                 <i class="bi bi-plus"></i>
                                             </button>
                                         </div>
-                                        <small class="form-text text-muted">Use +/- buttons or arrows to change in monthly increments</small>
+                                        <small class="form-text text-muted">Use +/- buttons for monthly increments. Custom amounts can be adjusted on confirmation page.</small>
+                                        <div id="custom-amount-notice" class="form-text text-info mt-1" style="display: none;">
+                                            <i class="bi bi-info-circle"></i> Custom amount entered. End date can be modified on confirmation page.
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -325,19 +328,18 @@
                                             <dd class="col-sm-7">{{ current_expiration|date:"F j, Y" }}</dd>
                                             
                                             <dt class="col-sm-5">New Expires:</dt>
-                                            <dd class="col-sm-7"><strong class="text-primary">{{ new_expiration|date:"F j, Y" }}</strong></dd>
-                                            
-                                            <dt class="col-sm-5">Extension:</dt>
                                             <dd class="col-sm-7">
-                                                <span class="badge bg-success">
-                                                    Extended
-                                                </span>
+                                                <select class="form-select" id="override-expiration-select" name="override_expiration">
+                                                    <!-- Options will be populated by JavaScript -->
+                                                </select>
+                                                <small class="form-text text-muted">All dates are automatically set to the last day of the month</small>
                                             </dd>
                                         </dl>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
 
                         <!-- Confirmation Buttons -->
                         <div class="d-flex justify-content-between mt-4">
@@ -460,6 +462,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const paymentAmount = parseFloat(amountInput.value) || 0;
         const newExpiration = calculateNewExpiration(paymentAmount);
         newExpirationSpan.textContent = formatDate(newExpiration);
+        
+        // Show/hide custom amount notice
+        const customNotice = document.getElementById('custom-amount-notice');
+        const isCustomAmount = (paymentAmount % monthlyDues) !== 0;
+        if (customNotice) {
+            customNotice.style.display = isCustomAmount ? 'block' : 'none';
+        }
     }
     
     // Plus button - add one month's dues
@@ -484,6 +493,43 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial calculation
     updateExpirationDate();
+});
+
+// Simple date override for confirmation page
+document.addEventListener('DOMContentLoaded', function() {
+    const dateSelect = document.getElementById('override-expiration-select');
+    if (!dateSelect) return; // Only run on confirmation page
+    
+    // Get the calculated expiration date from the template
+    const calculatedExpiration = new Date("{{ new_expiration|date:'Y-m-d' }}");
+    
+    // Create options starting from calculated date and extending 6 months forward
+    for (let i = 0; i <= 6; i++) {
+        // Calculate month and year
+        let month = calculatedExpiration.getMonth() + i;
+        let year = calculatedExpiration.getFullYear() + Math.floor(month / 12);
+        month = month % 12;
+        
+        // Create end-of-month date
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        const endOfMonthDate = new Date(year, month, lastDay);
+        
+        // Create option
+        const option = document.createElement('option');
+        option.value = endOfMonthDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        // Format display text
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        option.textContent = `${monthNames[month]} ${lastDay}, ${year}`;
+        
+        // Select the calculated expiration date by default (first option)
+        if (i === 0) {
+            option.selected = true;
+        }
+        
+        dateSelect.appendChild(option);
+    }
 });
 </script>
 {% endblock %}

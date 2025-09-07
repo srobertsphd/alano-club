@@ -1,13 +1,18 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q, Max
+from django.db.models import Q
 from django.core.paginator import Paginator
 from django.contrib import messages
-from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 import calendar
 
-from .models import Member, Payment, PaymentMethod
+from .models import Member, Payment, PaymentMethod, MemberType
+
+
+def ensure_end_of_month(date):
+    """Force date to be the last day of its month"""
+    last_day = calendar.monthrange(date.year, date.month)[1]
+    return date.replace(day=last_day)
 
 
 def add_months_to_date(date, months):
@@ -233,7 +238,7 @@ def add_payment_view(request):
             "member": member,
             "payment_methods": payment_methods,
             "suggested_amount": suggested_amount,
-            "today": timezone.now().date(),
+            "today": date.today(),
         }
         return render(request, "members/add_payment.html", context)
 
@@ -253,7 +258,12 @@ def add_payment_view(request):
                 # Don't allow payments for deceased members
                 if member.status == "deceased":
                     raise ValueError("Cannot add payments for deceased members")
+
+                # Check for date override
+                override_expiration = request.POST.get("override_expiration")
+
                 amount = Decimal(amount)
+
                 payment_date = datetime.strptime(payment_date, "%Y-%m-%d").date()
                 payment_method = get_object_or_404(PaymentMethod, pk=payment_method_id)
 
@@ -261,22 +271,31 @@ def add_payment_view(request):
                 if not receipt_number:
                     raise ValueError("Receipt number is required")
 
-                # Calculate new expiration date based on payment amount
-                # Examples:
-                # - $30 payment / $30 monthly dues = 1 month paid
-                # - $60 payment / $30 monthly dues = 2 months paid
-                # - $15 payment / $30 monthly dues = 0.5 months = 0 months (rounded down)
-                if member.member_type and member.member_type.member_dues > 0:
-                    # Calculate how many months the payment covers
-                    # Example: $60 payment / $30 monthly dues = 2 months
-                    months_paid = float(amount) / float(member.member_type.member_dues)
-                    total_months_to_add = int(months_paid)
-                    new_expiration = add_months_to_date(
-                        member.expiration_date, total_months_to_add
-                    )
+                # Calculate or use override expiration date
+                if override_expiration:
+                    # Use selected override date (already end of month from dropdown)
+                    new_expiration = datetime.strptime(
+                        override_expiration, "%Y-%m-%d"
+                    ).date()
                 else:
-                    # Default to 1 month if no member type or dues
-                    new_expiration = add_months_to_date(member.expiration_date, 1)
+                    # Calculate new expiration date based on payment amount
+                    # Examples:
+                    # - $30 payment / $30 monthly dues = 1 month paid
+                    # - $60 payment / $30 monthly dues = 2 months paid
+                    # - $15 payment / $30 monthly dues = 0.5 months = 0 months (rounded down)
+                    if member.member_type and member.member_type.member_dues > 0:
+                        # Calculate how many months the payment covers
+                        # Example: $60 payment / $30 monthly dues = 2 months
+                        months_paid = float(amount) / float(
+                            member.member_type.member_dues
+                        )
+                        total_months_to_add = int(months_paid)
+                        new_expiration = add_months_to_date(
+                            member.expiration_date, total_months_to_add
+                        )
+                    else:
+                        # Default to 1 month if no member type or dues
+                        new_expiration = add_months_to_date(member.expiration_date, 1)
 
                 # Store in session for final processing
                 request.session["payment_data"] = {
@@ -377,3 +396,198 @@ def add_payment_view(request):
     else:
         # Invalid step
         return redirect("members:add_payment")
+
+
+def add_member_view(request):
+    """Add new member workflow with form, validation, and confirmation"""
+
+    # Get workflow step
+    step = request.GET.get("step", "form")
+
+    if step == "form":
+        # Step 1: Member Form
+        member_types = MemberType.objects.all()
+
+        # Get next available member ID and suggestions efficiently
+        # Get all used member IDs in one query
+        used_ids = set(
+            Member.objects.filter(status="active", member_id__isnull=False).values_list(
+                "member_id", flat=True
+            )
+        )
+
+        # Find next 5 available IDs efficiently
+        suggested_ids = []
+        for id_num in range(1, 1001):  # Search range 1-1000
+            if id_num not in used_ids:
+                suggested_ids.append(id_num)
+                if len(suggested_ids) >= 5:
+                    break
+
+        next_member_id = suggested_ids[0] if suggested_ids else 1
+
+        context = {
+            "step": "form",
+            "member_types": member_types,
+            "today": date.today(),
+            "next_member_id": next_member_id,
+            "suggested_ids": suggested_ids,
+        }
+        return render(request, "members/add_member.html", context)
+
+    elif step == "confirm":
+        # Step 2: Confirmation (form submitted)
+        if request.method == "POST":
+            # Get form data
+            first_name = request.POST.get("first_name", "").strip()
+            last_name = request.POST.get("last_name", "").strip()
+            email = request.POST.get("email", "").strip()
+            member_type_id = request.POST.get("member_type")
+            member_id = request.POST.get("member_id")
+            milestone_date = request.POST.get("milestone_date")
+            date_joined = request.POST.get("date_joined")
+            home_address = request.POST.get("home_address", "").strip()
+            home_city = request.POST.get("home_city", "").strip()
+            home_state = request.POST.get("home_state", "").strip()
+            home_zip = request.POST.get("home_zip", "").strip()
+            home_phone = request.POST.get("home_phone", "").strip()
+
+            # Validate required fields
+            try:
+                if not first_name:
+                    raise ValueError("First name is required")
+                if not last_name:
+                    raise ValueError("Last name is required")
+                if not member_type_id:
+                    raise ValueError("Member type is required")
+                if not member_id:
+                    raise ValueError("Member ID is required")
+                if not milestone_date:
+                    raise ValueError("Milestone date is required")
+                if not date_joined:
+                    raise ValueError("Date joined is required")
+
+                # Validate member ID is available
+                member_id_int = int(member_id)
+                if Member.objects.filter(
+                    status="active", member_id=member_id_int
+                ).exists():
+                    raise ValueError(f"Member ID {member_id_int} is already in use")
+
+                # Validate member type exists
+                member_type = get_object_or_404(MemberType, pk=member_type_id)
+
+                # Parse and validate dates
+                milestone_date_obj = datetime.strptime(
+                    milestone_date, "%Y-%m-%d"
+                ).date()
+                date_joined_obj = datetime.strptime(date_joined, "%Y-%m-%d").date()
+
+                # Calculate initial expiration date (end of current month + member type months)
+                today = date.today()
+                current_month_end = ensure_end_of_month(today)
+                initial_expiration = add_months_to_date(
+                    current_month_end, member_type.num_months
+                )
+
+                # Store in session for final processing
+                request.session["member_data"] = {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "member_type_id": member_type_id,
+                    "member_id": member_id_int,
+                    "milestone_date": milestone_date_obj.isoformat(),
+                    "date_joined": date_joined_obj.isoformat(),
+                    "home_address": home_address,
+                    "home_city": home_city,
+                    "home_state": home_state,
+                    "home_zip": home_zip,
+                    "home_phone": home_phone,
+                    "initial_expiration": initial_expiration.isoformat(),
+                }
+
+                context = {
+                    "step": "confirm",
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "member_type": member_type,
+                    "member_id": member_id_int,
+                    "milestone_date": milestone_date_obj,
+                    "date_joined": date_joined_obj,
+                    "home_address": home_address,
+                    "home_city": home_city,
+                    "home_state": home_state,
+                    "home_zip": home_zip,
+                    "home_phone": home_phone,
+                    "initial_expiration": initial_expiration,
+                }
+                return render(request, "members/add_member.html", context)
+
+            except (ValueError, MemberType.DoesNotExist) as e:
+                messages.error(request, f"Invalid member data: {e}")
+                return redirect("members:add_member")
+        else:
+            messages.error(request, "Invalid request.")
+            return redirect("members:add_member")
+
+    elif step == "process":
+        # Step 3: Final Processing
+        if request.method == "POST" and request.POST.get("confirm") == "yes":
+            member_data = request.session.get("member_data")
+            if not member_data:
+                messages.error(request, "Member session expired. Please try again.")
+                return redirect("members:add_member")
+
+            try:
+                # Get member type
+                member_type = get_object_or_404(
+                    MemberType, pk=member_data["member_type_id"]
+                )
+
+                # Create the member record with specific member_id
+                member = Member.objects.create_new_member(
+                    first_name=member_data["first_name"],
+                    last_name=member_data["last_name"],
+                    email=member_data["email"],
+                    member_type=member_type,
+                    milestone_date=datetime.fromisoformat(
+                        member_data["milestone_date"]
+                    ).date(),
+                    date_joined=datetime.fromisoformat(
+                        member_data["date_joined"]
+                    ).date(),
+                    home_address=member_data["home_address"],
+                    home_city=member_data["home_city"],
+                    home_state=member_data["home_state"],
+                    home_zip=member_data["home_zip"],
+                    home_phone=member_data["home_phone"],
+                    expiration_date=datetime.fromisoformat(
+                        member_data["initial_expiration"]
+                    ).date(),
+                    member_id=member_data["member_id"],
+                )
+
+                # Clear session data
+                if "member_data" in request.session:
+                    del request.session["member_data"]
+
+                # Create success message
+                success_msg = f"Member {member.full_name} (#{member.member_id}) successfully created. Membership expires {member.expiration_date.strftime('%B %d, %Y')}."
+                messages.success(request, success_msg)
+                return redirect("members:search")
+
+            except Exception as e:
+                messages.error(request, f"Error creating member: {e}")
+                return redirect("members:add_member")
+        else:
+            # User cancelled or invalid request
+            if "member_data" in request.session:
+                del request.session["member_data"]
+            messages.info(request, "Member creation cancelled.")
+            return redirect("members:add_member")
+
+    else:
+        # Invalid step
+        return redirect("members:add_member")

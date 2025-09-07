@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django import forms
+from django.db import models
 from .models import Member, MemberType, PaymentMethod, Payment
 
 
@@ -24,6 +26,25 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 
 @admin.register(Member)
 class MemberAdmin(admin.ModelAdmin):
+    formfield_overrides = {
+        models.TextField: {"widget": forms.Textarea(attrs={"rows": 2, "cols": 50})},
+    }
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "home_phone":
+            kwargs["widget"] = forms.TextInput(
+                attrs={
+                    "placeholder": "(555) 123-4567",
+                    "pattern": r"\(\d{3}\) \d{3}-\d{4}",
+                    "title": "Phone format: (123) 456-7890",
+                    "class": "phone-format",
+                }
+            )
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    class Media:
+        js = ("members/js/phone_format.js",)
+
     list_display = [
         "member_id",
         "first_name",

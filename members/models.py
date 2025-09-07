@@ -17,7 +17,7 @@ class MemberType(models.Model):
         db_table = "members_membertype"
 
     def __str__(self):
-        return f"{self.member_type} (${self.member_dues}/month)"
+        return self.member_type
 
 
 class PaymentMethod(models.Model):
@@ -87,10 +87,18 @@ class MemberManager(models.Manager):
         ).first()
 
     def create_new_member(self, **kwargs):
-        """Create new member with auto-assigned member_id"""
+        """Create new member with auto-assigned or custom member_id"""
+        # Extract member_id if provided
+        custom_member_id = kwargs.pop("member_id", None)
+
         member = self.create(**kwargs)
         if member.status == "active":
-            member.member_id = self.get_next_available_id()
+            if custom_member_id is not None:
+                # Use provided member_id
+                member.member_id = custom_member_id
+            else:
+                # Auto-assign next available ID
+                member.member_id = self.get_next_available_id()
             member.preferred_member_id = member.member_id
             member.save()
         return member

@@ -57,7 +57,8 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'add_member' %}active{% endif %}" 
+                               href="{% url 'members:add_member' %}">
                                 <i class="bi bi-person-plus"></i>
                                 Add Member
                             </a>

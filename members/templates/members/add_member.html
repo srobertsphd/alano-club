@@ -1,0 +1,375 @@
+{% extends "members/base.html" %}
+{% load static %}
+
+{% block title %}
+    {% if step == 'form' %}
+        Add New Member
+    {% elif step == 'confirm' %}
+        Confirm Member Details
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-person-plus-fill me-2"></i>
+                        {% if step == 'form' %}
+                            Add New Member
+                        {% elif step == 'confirm' %}
+                            Confirm Member Details
+                        {% endif %}
+                    </h1>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Step 1: Member Form -->
+                    {% if step == 'form' %}
+                        <form method="post" action="?step=confirm">
+                            {% csrf_token %}
+                            
+                            <!-- Required Information Section -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <h5 class="text-primary border-bottom pb-2 mb-4">
+                                        <i class="bi bi-asterisk me-2"></i>Required Information
+                                    </h5>
+                                </div>
+                            </div>
+                            
+                            <!-- Member ID Field - Top Left -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <label for="member_id" class="form-label">Member ID *</label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="member_id" 
+                                                   name="member_id" 
+                                                   value="{{ next_member_id }}"
+                                                   required>
+                                            <select class="form-select" id="member_id_suggestions" style="max-width: 140px;">
+                                                <option value="">Quick Select</option>
+                                                {% for suggested_id in suggested_ids %}
+                                                <option value="{{ suggested_id }}">{{ suggested_id }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <small class="form-text text-muted">Next 5 available: {% for id in suggested_ids %}{{ id }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="first_name" class="form-label">First Name *</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="first_name" 
+                                               name="first_name" 
+                                               required
+                                               placeholder="Enter first name">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="last_name" class="form-label">Last Name *</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="last_name" 
+                                               name="last_name" 
+                                               required
+                                               placeholder="Enter last name">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="member_type" class="form-label">Member Type *</label>
+                                        <select class="form-select" id="member_type" name="member_type" required>
+                                            <option value="">Select member type...</option>
+                                            {% for member_type in member_types %}
+                                            <option value="{{ member_type.pk }}">{{ member_type.member_type }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">Email</label>
+                                        <input type="email" 
+                                               class="form-control" 
+                                               id="email" 
+                                               name="email" 
+                                               placeholder="Enter email address">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="milestone_date" class="form-label">Milestone Date *</label>
+                                        <input type="date" 
+                                               class="form-control" 
+                                               id="milestone_date" 
+                                               name="milestone_date" 
+                                               required>
+                                        <small class="form-text text-muted">Sobriety date or other significant milestone</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="date_joined" class="form-label">Date Joined *</label>
+                                        <input type="date" 
+                                               class="form-control" 
+                                               id="date_joined" 
+                                               name="date_joined" 
+                                               value="{{ today|date:'Y-m-d' }}"
+                                               required>
+                                        <small class="form-text text-muted">Date joined the organization</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Contact Information Section -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <h5 class="text-secondary border-bottom pb-2 mb-4">
+                                        <i class="bi bi-house-door me-2"></i>Contact Information (Optional)
+                                    </h5>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="mb-3">
+                                        <label for="home_address" class="form-label">Home Address</label>
+                                        <textarea class="form-control" 
+                                                  id="home_address" 
+                                                  name="home_address" 
+                                                  rows="2"
+                                                  placeholder="Enter street address"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="home_city" class="form-label">City</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="home_city" 
+                                               name="home_city" 
+                                               placeholder="Enter city">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="home_state" class="form-label">State</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="home_state" 
+                                               name="home_state" 
+                                               maxlength="2"
+                                               placeholder="Enter state code (e.g., CA, NY)">
+                                        <small class="form-text text-muted">2-letter state code</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="home_zip" class="form-label">ZIP Code</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="home_zip" 
+                                               name="home_zip" 
+                                               maxlength="10"
+                                               placeholder="12345 or 12345-6789">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="home_phone" class="form-label">Phone Number</label>
+                                        <input type="tel" 
+                                               class="form-control" 
+                                               id="home_phone" 
+                                               name="home_phone" 
+                                               placeholder="(555) 123-4567">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Form Actions -->
+                            <div class="d-flex justify-content-between mt-4">
+                                <a href="{% url 'members:search' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Back to Search
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    Continue to Review
+                                    <i class="bi bi-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </form>
+                    
+                    <!-- Step 2: Confirmation -->
+                    {% elif step == 'confirm' %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Please review the member details below and confirm to create the new member.
+                        </div>
+                        
+                        <div class="row">
+                            <!-- Member Details -->
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Member Information</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-5">Name:</dt>
+                                            <dd class="col-sm-7"><strong>{{ first_name }} {{ last_name }}</strong></dd>
+                                            
+                                            <dt class="col-sm-5">Member ID:</dt>
+                                            <dd class="col-sm-7"><strong class="text-primary">#{{ member_id }}</strong></dd>
+                                            
+                                            <dt class="col-sm-5">Member Type:</dt>
+                                            <dd class="col-sm-7">{{ member_type.member_type }}</dd>
+                                            
+                                            <dt class="col-sm-5">Email:</dt>
+                                            <dd class="col-sm-7">{{ email|default:"Not provided" }}</dd>
+                                            
+                                            <dt class="col-sm-5">Milestone Date:</dt>
+                                            <dd class="col-sm-7">{{ milestone_date|date:"F j, Y" }}</dd>
+                                            
+                                            <dt class="col-sm-5">Date Joined:</dt>
+                                            <dd class="col-sm-7">{{ date_joined|date:"F j, Y" }}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Membership & Contact -->
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Membership & Contact</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-5">Initial Expiration:</dt>
+                                            <dd class="col-sm-7"><strong class="text-success">{{ initial_expiration|date:"F j, Y" }}</strong></dd>
+                                            
+                                            <dt class="col-sm-5">Address:</dt>
+                                            <dd class="col-sm-7">
+                                                {% if home_address %}
+                                                    {{ home_address }}<br>
+                                                    {{ home_city }}{% if home_city and home_state %},{% endif %} {{ home_state }} {{ home_zip }}
+                                                {% else %}
+                                                    Not provided
+                                                {% endif %}
+                                            </dd>
+                                            
+                                            <dt class="col-sm-5">Phone:</dt>
+                                            <dd class="col-sm-7">{{ home_phone|default:"Not provided" }}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Confirmation Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="?step=form" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>
+                                Back to Edit
+                            </a>
+                            <div>
+                                <form method="post" action="?step=process" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="confirm" value="no">
+                                    <button type="submit" class="btn btn-outline-danger me-2">
+                                        <i class="bi bi-x-circle me-1"></i>
+                                        Cancel
+                                    </button>
+                                </form>
+                                <form method="post" action="?step=process" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="confirm" value="yes">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Create Member
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Only run on form step
+    if (document.getElementById('first_name')) {
+        // Auto-capitalize first and last names
+        const nameFields = ['first_name', 'last_name'];
+        nameFields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.addEventListener('input', function() {
+                    // Capitalize first letter of each word
+                    this.value = this.value.replace(/\b\w/g, l => l.toUpperCase());
+                });
+            }
+        });
+        
+        // Format phone number
+        const phoneField = document.getElementById('home_phone');
+        if (phoneField) {
+            phoneField.addEventListener('input', function() {
+                // Remove all non-digits
+                let value = this.value.replace(/\D/g, '');
+                
+                // Format as (XXX) XXX-XXXX
+                if (value.length >= 6) {
+                    value = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6, 10)}`;
+                } else if (value.length >= 3) {
+                    value = `(${value.slice(0, 3)}) ${value.slice(3)}`;
+                }
+                
+                this.value = value;
+            });
+        }
+        
+        // Member ID suggestions dropdown
+        const memberIdInput = document.getElementById('member_id');
+        const memberIdSuggestions = document.getElementById('member_id_suggestions');
+        if (memberIdInput && memberIdSuggestions) {
+            memberIdSuggestions.addEventListener('change', function() {
+                if (this.value) {
+                    memberIdInput.value = this.value;
+                    this.value = ''; // Reset dropdown
+                }
+            });
+        }
+    }
+});
+</script>
+{% endblock %}
