@@ -49,6 +49,35 @@ class TestPaymentServiceCalculateExpiration:
         )
         assert result == override_date
 
+    def test_calculate_expiration_with_override_end_of_month(self, member):
+        """Test that override dates are properly handled as end-of-month dates"""
+        # Test various months to ensure end-of-month handling works
+        test_cases = [
+            (date(2025, 1, 15), date(2025, 1, 31)),  # January
+            (date(2025, 2, 14), date(2025, 2, 28)),  # February (non-leap year)
+            (date(2024, 2, 14), date(2024, 2, 29)),  # February (leap year)
+            (date(2025, 4, 10), date(2025, 4, 30)),  # April
+            (date(2025, 6, 1), date(2025, 6, 30)),  # June
+            (date(2025, 9, 20), date(2025, 9, 30)),  # September
+            (date(2025, 12, 5), date(2025, 12, 31)),  # December
+        ]
+
+        for override_date, expected_end_of_month in test_cases:
+            result = PaymentService.calculate_expiration(
+                member, Decimal("30.00"), override_date
+            )
+            assert result == override_date, (
+                f"Override date {override_date} should be returned as-is"
+            )
+
+            # Also test that ensure_end_of_month utility works correctly
+            from members.utils import ensure_end_of_month
+
+            end_of_month = ensure_end_of_month(override_date)
+            assert end_of_month == expected_end_of_month, (
+                f"End of month for {override_date} should be {expected_end_of_month}, got {end_of_month}"
+            )
+
     def test_calculate_expiration_with_payment_amount(self, member):
         """Test expiration calculation based on payment amount"""
         # $30 payment / $30 dues = 1 month
@@ -258,3 +287,72 @@ class TestPaymentServiceProcessPayment:
         payment, was_inactive = result
         assert isinstance(payment, Payment)
         assert isinstance(was_inactive, bool)
+
+    def test_process_payment_with_override_expiration_updates_member(
+        self, active_member, payment_method
+    ):
+        """Test that override expiration date properly updates member expiration"""
+        # Set initial expiration
+        active_member.expiration_date = date(2025, 3, 31)
+        active_member.save()
+
+        # Process payment with override expiration (simulating month/year dropdown selection)
+        # JavaScript would calculate this as end-of-month date
+        override_expiration = date(2025, 12, 31)  # December 31, 2025
+
+        payment_data = {
+            "payment_method_id": str(payment_method.pk),
+            "amount": "30.00",
+            "payment_date": "2025-04-15",
+            "receipt_number": "TEST002",
+            "new_expiration": override_expiration.isoformat(),
+        }
+
+        payment, was_inactive = PaymentService.process_payment(
+            active_member, payment_data
+        )
+
+        # Verify payment was created
+        assert payment is not None
+        assert payment.amount == Decimal("30.00")
+
+        # Verify member expiration was updated to override date
+        active_member.refresh_from_db()
+        assert active_member.expiration_date == override_expiration
+
+    def test_process_payment_with_override_various_months(
+        self, active_member, payment_method
+    ):
+        """Test override expiration with various months (including leap year February)"""
+        test_cases = [
+            (date(2025, 1, 31), "January end-of-month"),
+            (date(2025, 2, 28), "February end-of-month (non-leap year)"),
+            (date(2024, 2, 29), "February end-of-month (leap year)"),
+            (date(2025, 4, 30), "April end-of-month"),
+            (date(2025, 6, 30), "June end-of-month"),
+            (date(2025, 9, 30), "September end-of-month"),
+            (date(2025, 12, 31), "December end-of-month"),
+        ]
+
+        for override_expiration, description in test_cases:
+            # Reset member expiration
+            active_member.expiration_date = date(2025, 3, 31)
+            active_member.save()
+
+            payment_data = {
+                "payment_method_id": str(payment_method.pk),
+                "amount": "30.00",
+                "payment_date": "2025-04-15",
+                "receipt_number": f"TEST-{override_expiration.month:02d}",
+                "new_expiration": override_expiration.isoformat(),
+            }
+
+            payment, was_inactive = PaymentService.process_payment(
+                active_member, payment_data
+            )
+
+            # Verify member expiration matches override
+            active_member.refresh_from_db()
+            assert active_member.expiration_date == override_expiration, (
+                f"Failed for {description}: expected {override_expiration}, got {active_member.expiration_date}"
+            )

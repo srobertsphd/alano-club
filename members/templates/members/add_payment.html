@@ -329,10 +329,20 @@
                                             
                                             <dt class="col-sm-5">New Expires:</dt>
                                             <dd class="col-sm-7">
-                                                <select class="form-select" id="override-expiration-select" name="override_expiration">
-                                                    <!-- Options will be populated by JavaScript -->
-                                                </select>
-                                                <small class="form-text text-muted">All dates are automatically set to the last day of the month</small>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <select class="form-select" id="override-month-select" name="override_month">
+                                                            <!-- Options will be populated by JavaScript -->
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <select class="form-select" id="override-year-select" name="override_year">
+                                                            <!-- Options will be populated by JavaScript -->
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <input type="hidden" id="override-expiration-calculated" name="override_expiration">
+                                                <small class="form-text text-muted">All dates are automatically set to the last day of the selected month</small>
                                             </dd>
                                         </dl>
                                     </div>
@@ -532,41 +542,103 @@ document.addEventListener('DOMContentLoaded', function() {
     updateExpirationDate();
 });
 
-// Simple date override for confirmation page
+// Enhanced date override for confirmation page with month/year dropdowns
 document.addEventListener('DOMContentLoaded', function() {
-    const dateSelect = document.getElementById('override-expiration-select');
-    if (!dateSelect) return; // Only run on confirmation page
+    const monthSelect = document.getElementById('override-month-select');
+    const yearSelect = document.getElementById('override-year-select');
+    const calculatedHidden = document.getElementById('override-expiration-calculated');
+    
+    if (!monthSelect || !yearSelect || !calculatedHidden) return; // Only run on confirmation page
     
     // Get the calculated expiration date from the template
     const calculatedExpiration = new Date("{{ new_expiration|date:'Y-m-d' }}");
+    const calculatedMonth = calculatedExpiration.getMonth() + 1; // JavaScript months are 0-indexed
+    const calculatedYear = calculatedExpiration.getFullYear();
     
-    // Create options starting from calculated date and extending 6 months forward
-    for (let i = 0; i <= 6; i++) {
-        // Calculate month and year
-        let month = calculatedExpiration.getMonth() + i;
-        let year = calculatedExpiration.getFullYear() + Math.floor(month / 12);
-        month = month % 12;
-        
-        // Create end-of-month date
-        const lastDay = new Date(year, month + 1, 0).getDate();
-        const endOfMonthDate = new Date(year, month, lastDay);
-        
-        // Create option
+    // Get current date for validation (prevent past dates, allow current month)
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+    
+    // Month names and their last day numbers (for non-leap years)
+    const monthData = [
+        {name: 'January', lastDay: 31},
+        {name: 'February', lastDay: '28/29'}, // Leap year varies
+        {name: 'March', lastDay: 31},
+        {name: 'April', lastDay: 30},
+        {name: 'May', lastDay: 31},
+        {name: 'June', lastDay: 30},
+        {name: 'July', lastDay: 31},
+        {name: 'August', lastDay: 31},
+        {name: 'September', lastDay: 30},
+        {name: 'October', lastDay: 31},
+        {name: 'November', lastDay: 30},
+        {name: 'December', lastDay: 31},
+    ];
+    
+    // Populate month dropdown (all 12 months) with last day shown
+    for (let month = 1; month <= 12; month++) {
         const option = document.createElement('option');
-        option.value = endOfMonthDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        option.value = month;
+        const monthInfo = monthData[month - 1];
+        // Format: "April 30" or "February 28/29"
+        if (monthInfo.lastDay === '28/29') {
+            option.textContent = `${monthInfo.name} 28/29`;
+        } else {
+            option.textContent = `${monthInfo.name} ${monthInfo.lastDay}`;
+        }
         
-        // Format display text
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-        option.textContent = `${monthNames[month]} ${lastDay}, ${year}`;
-        
-        // Select the calculated expiration date by default (first option)
-        if (i === 0) {
+        // Set default to calculated expiration month
+        if (month === calculatedMonth) {
             option.selected = true;
         }
         
-        dateSelect.appendChild(option);
+        monthSelect.appendChild(option);
     }
+    
+    // Populate year dropdown (current year through 4 years forward)
+    const endYear = currentYear + 4;
+    for (let year = currentYear; year <= endYear; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        
+        // Set default to calculated expiration year
+        if (year === calculatedYear) {
+            option.selected = true;
+        }
+        
+        yearSelect.appendChild(option);
+    }
+    
+    // Function to calculate end-of-month date and update hidden field
+    function updateCalculatedDate() {
+        const selectedMonth = parseInt(monthSelect.value);
+        const selectedYear = parseInt(yearSelect.value);
+        
+        // Validation: Prevent selecting dates in the past (but allow current month)
+        if (selectedYear < currentYear || 
+            (selectedYear === currentYear && selectedMonth < currentMonth)) {
+            // Reset to calculated expiration date if invalid
+            monthSelect.value = calculatedMonth;
+            yearSelect.value = calculatedYear;
+            return;
+        }
+        
+        // Calculate last day of selected month
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+        const endOfMonthDate = new Date(selectedYear, selectedMonth - 1, lastDay);
+        
+        // Update hidden field with calculated date (YYYY-MM-DD format)
+        calculatedHidden.value = endOfMonthDate.toISOString().split('T')[0];
+    }
+    
+    // Update calculated date when month or year changes
+    monthSelect.addEventListener('change', updateCalculatedDate);
+    yearSelect.addEventListener('change', updateCalculatedDate);
+    
+    // Initialize with calculated expiration date
+    updateCalculatedDate();
     
     // Copy override_expiration value to hidden fields when forms are submitted
     const confirmFormMobile = document.getElementById('confirm-form-mobile');
@@ -574,16 +646,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const overrideHiddenMobile = document.getElementById('override-expiration-hidden-mobile');
     const overrideHiddenDesktop = document.getElementById('override-expiration-hidden-desktop');
     
-    if (confirmFormMobile && overrideHiddenMobile) {
-        confirmFormMobile.addEventListener('submit', function() {
-            overrideHiddenMobile.value = dateSelect.value;
-        });
+    // Update hidden fields before form submission
+    function updateHiddenFields() {
+        const calculatedDate = calculatedHidden.value;
+        if (overrideHiddenMobile) overrideHiddenMobile.value = calculatedDate;
+        if (overrideHiddenDesktop) overrideHiddenDesktop.value = calculatedDate;
     }
     
-    if (confirmFormDesktop && overrideHiddenDesktop) {
-        confirmFormDesktop.addEventListener('submit', function() {
-            overrideHiddenDesktop.value = dateSelect.value;
-        });
+    if (confirmFormMobile) {
+        confirmFormMobile.addEventListener('submit', updateHiddenFields);
+    }
+    
+    if (confirmFormDesktop) {
+        confirmFormDesktop.addEventListener('submit', updateHiddenFields);
     }
 });
 </script>

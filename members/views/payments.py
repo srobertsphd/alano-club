@@ -114,7 +114,8 @@ def add_payment_view(request):
                 if member.status == "deceased":
                     raise ValueError("Cannot add payments for deceased members")
 
-                # Check for date override
+                # Check for date override (populated by month/year dropdowns via JavaScript)
+                # JavaScript calculates end-of-month date and populates override_expiration hidden field
                 override_expiration = request.POST.get("override_expiration")
 
                 amount = Decimal(amount)
@@ -127,11 +128,18 @@ def add_payment_view(request):
                     raise ValueError("Receipt number is required")
 
                 # Calculate or use override expiration date using PaymentService
+                # override_expiration is already calculated as end-of-month by JavaScript
                 override_expiration_date = None
                 if override_expiration:
                     override_expiration_date = datetime.strptime(
                         override_expiration, "%Y-%m-%d"
                     ).date()
+                    # Ensure it's end of month (safety check, though JavaScript should handle this)
+                    from ..utils import ensure_end_of_month
+
+                    override_expiration_date = ensure_end_of_month(
+                        override_expiration_date
+                    )
 
                 new_expiration = PaymentService.calculate_expiration(
                     member, amount, override_expiration_date
@@ -186,12 +194,19 @@ def add_payment_view(request):
                 )
 
                 # Check if override expiration was changed on confirmation page
+                # JavaScript populates override_expiration from month/year dropdowns
                 override_expiration = request.POST.get("override_expiration")
                 if override_expiration:
                     # Recalculate expiration with override date
                     override_expiration_date = datetime.strptime(
                         override_expiration, "%Y-%m-%d"
                     ).date()
+                    # Ensure it's end of month (safety check, though JavaScript should handle this)
+                    from ..utils import ensure_end_of_month
+
+                    override_expiration_date = ensure_end_of_month(
+                        override_expiration_date
+                    )
                     amount = Decimal(payment_data["amount"])
                     new_expiration = PaymentService.calculate_expiration(
                         member, amount, override_expiration_date

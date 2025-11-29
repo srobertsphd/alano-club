@@ -7,6 +7,14 @@ Note: These tests validate views work correctly regardless of file organization.
 """
 
 import pytest
+from datetime import date
+from decimal import Decimal
+from django.test import Client
+from django.contrib.auth import get_user_model
+
+from members.models import Member, Payment, PaymentMethod, MemberType
+
+User = get_user_model()
 
 
 @pytest.mark.integration
@@ -41,3 +49,115 @@ class TestViewIntegration:
         except Exception:
             # If URL resolution fails, that's okay for now
             pass
+
+
+@pytest.mark.django_db
+@pytest.mark.integration
+class TestPaymentViewWithOverride:
+    """Integration tests for payment view with override expiration"""
+
+    @pytest.fixture
+    def user(self, db):
+        """Create a staff user for authentication"""
+        return User.objects.create_user(
+            username="testuser",
+            password="testpass123",
+            is_staff=True,
+        )
+
+    @pytest.fixture
+    def client(self, user):
+        """Create authenticated client"""
+        client = Client()
+        client.force_login(user)
+        return client
+
+    @pytest.fixture
+    def member_type(self, db):
+        """Create a test member type"""
+        return MemberType.objects.create(
+            member_type="Regular",
+            member_dues=Decimal("30.00"),
+            num_months=1,
+        )
+
+    @pytest.fixture
+    def payment_method(self, db):
+        """Create a test payment method"""
+        return PaymentMethod.objects.create(payment_method="Cash")
+
+    @pytest.fixture
+    def member(self, db, member_type):
+        """Create a test member"""
+        return Member.objects.create(
+            first_name="Test",
+            last_name="Member",
+            email="test@example.com",
+            member_type=member_type,
+            status="active",
+            expiration_date=date(2025, 3, 31),
+            date_joined=date(2020, 1, 1),
+        )
+
+    def test_payment_flow_with_override_expiration(
+        self, client, member, payment_method
+    ):
+        """Test full payment flow with override expiration date"""
+        initial_expiration = member.expiration_date
+        initial_payment_count = Payment.objects.count()
+
+        # Step 1: Submit payment form (form step)
+        form_data = {
+            "member_uuid": str(member.member_uuid),
+            "amount": "30.00",
+            "payment_date": "2025-04-15",
+            "payment_method": str(payment_method.pk),
+            "receipt_number": "TEST-OVERRIDE-001",
+        }
+
+        response = client.post(
+            "/payments/add/?step=form&member=" + str(member.member_uuid), form_data
+        )
+        assert response.status_code == 200  # Should show confirmation page
+
+        # Step 2: Confirm payment with override expiration (confirm step)
+        # Simulate JavaScript populating override_expiration from month/year dropdowns
+        override_expiration = date(2025, 12, 31)  # December 31, 2025
+
+        confirm_data = {
+            "member_uuid": str(member.member_uuid),
+            "amount": "30.00",
+            "payment_date": "2025-04-15",
+            "payment_method": str(payment_method.pk),
+            "receipt_number": "TEST-OVERRIDE-001",
+            "override_expiration": override_expiration.isoformat(),  # From JavaScript
+        }
+
+        response = client.post("/payments/add/?step=confirm", confirm_data)
+        assert (
+            response.status_code == 200
+        )  # Should show confirmation page with override
+
+        # Step 3: Process payment (process step)
+        process_data = {
+            "confirm": "yes",
+            "override_expiration": override_expiration.isoformat(),  # From confirmation form
+        }
+
+        response = client.post("/payments/add/?step=process", process_data)
+
+        # Should redirect to member detail page
+        assert response.status_code == 302
+        assert f"/{member.member_uuid}/" in response.url
+
+        # Verify payment was created
+        assert Payment.objects.count() == initial_payment_count + 1
+        payment = Payment.objects.filter(receipt_number="TEST-OVERRIDE-001").first()
+        assert payment is not None
+        assert payment.amount == Decimal("30.00")
+        assert payment.member == member
+
+        # Verify member expiration was updated to override date
+        member.refresh_from_db()
+        assert member.expiration_date == override_expiration
+        assert member.expiration_date != initial_expiration
