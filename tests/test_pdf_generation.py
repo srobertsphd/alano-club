@@ -15,6 +15,6 @@ class TestPDFGeneration:
 
     def test_pdf_function_exists(self):
         """Test that generate_members_pdf function exists"""
-        from members.views import generate_members_pdf
+        from members.reports.pdf import generate_members_pdf
 
         assert callable(generate_members_pdf)

@@ -3,12 +3,12 @@ from django.db.models import Q, Prefetch
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.http import HttpResponse
 from datetime import datetime, date
 from decimal import Decimal
 
 from .models import Member, Payment, PaymentMethod, MemberType
 from .utils import ensure_end_of_month, add_months_to_date
+from .services import PaymentService
 
 
 @staff_member_required
@@ -260,31 +260,16 @@ def add_payment_view(request):
                 if not receipt_number:
                     raise ValueError("Receipt number is required")
 
-                # Calculate or use override expiration date
+                # Calculate or use override expiration date using PaymentService
+                override_expiration_date = None
                 if override_expiration:
-                    # Use selected override date (already end of month from dropdown)
-                    new_expiration = datetime.strptime(
+                    override_expiration_date = datetime.strptime(
                         override_expiration, "%Y-%m-%d"
                     ).date()
-                else:
-                    # Calculate new expiration date based on payment amount
-                    # Examples:
-                    # - $30 payment / $30 monthly dues = 1 month paid
-                    # - $60 payment / $30 monthly dues = 2 months paid
-                    # - $15 payment / $30 monthly dues = 0.5 months = 0 months (rounded down)
-                    if member.member_type and member.member_type.member_dues > 0:
-                        # Calculate how many months the payment covers
-                        # Example: $60 payment / $30 monthly dues = 2 months
-                        months_paid = float(amount) / float(
-                            member.member_type.member_dues
-                        )
-                        total_months_to_add = int(months_paid)
-                        new_expiration = add_months_to_date(
-                            member.expiration_date, total_months_to_add
-                        )
-                    else:
-                        # Default to 1 month if no member type or dues
-                        new_expiration = add_months_to_date(member.expiration_date, 1)
+
+                new_expiration = PaymentService.calculate_expiration(
+                    member, amount, override_expiration_date
+                )
 
                 # Store in session for final processing
                 request.session["payment_data"] = {
@@ -329,35 +314,29 @@ def add_payment_view(request):
                 return redirect("members:add_payment")
 
             try:
-                # Get member and create payment
+                # Get member and process payment using PaymentService
                 member = get_object_or_404(
                     Member, member_uuid=payment_data["member_uuid"]
                 )
-                payment_method = get_object_or_404(
-                    PaymentMethod, pk=payment_data["payment_method_id"]
+
+                # Check if override expiration was changed on confirmation page
+                override_expiration = request.POST.get("override_expiration")
+                if override_expiration:
+                    # Recalculate expiration with override date
+                    override_expiration_date = datetime.strptime(
+                        override_expiration, "%Y-%m-%d"
+                    ).date()
+                    amount = Decimal(payment_data["amount"])
+                    new_expiration = PaymentService.calculate_expiration(
+                        member, amount, override_expiration_date
+                    )
+                    # Update payment_data with new expiration
+                    payment_data["new_expiration"] = new_expiration.isoformat()
+
+                # Process payment using PaymentService
+                payment, was_inactive = PaymentService.process_payment(
+                    member, payment_data
                 )
-
-                # Create the payment record
-                payment = Payment.objects.create(
-                    member=member,
-                    payment_method=payment_method,
-                    amount=Decimal(payment_data["amount"]),
-                    date=datetime.fromisoformat(payment_data["payment_date"]).date(),
-                    receipt_number=payment_data["receipt_number"],
-                )
-
-                # Update member expiration date and reactivate if inactive
-                member.expiration_date = datetime.fromisoformat(
-                    payment_data["new_expiration"]
-                ).date()
-
-                # If member is inactive, reactivate them when they make a payment
-                was_inactive = member.status == "inactive"
-                if was_inactive:
-                    member.status = "active"
-                    member.date_inactivated = None
-
-                member.save()
 
                 # Clear session data
                 if "payment_data" in request.session:
@@ -436,50 +415,12 @@ def current_members_report_view(request):
 
     # Check if PDF is requested
     if request.GET.get("format") == "pdf":
+        from .reports.pdf import generate_members_pdf
+
         return generate_members_pdf(request, context)
 
     # Otherwise return HTML version for preview
     return render(request, "members/reports/current_members.html", context)
-
-
-def generate_members_pdf(request, context):
-    """Generate PDF version of current members report"""
-    try:
-        from weasyprint import HTML
-        from django.template.loader import render_to_string
-
-        # Render HTML template
-        html_string = render_to_string(
-            "members/reports/current_members_pdf.html", context
-        )
-
-        # Create PDF
-        html = HTML(string=html_string)
-        pdf = html.write_pdf()
-
-        # Return PDF response
-        response = HttpResponse(pdf, content_type="application/pdf")
-        response["Content-Disposition"] = (
-            f'attachment; filename="current_members_{context["report_date"].strftime("%Y_%m_%d")}.pdf"'
-        )
-        return response
-
-    except ImportError as e:
-        # WeasyPrint not installed, return HTML version with error message
-        from django.contrib import messages
-
-        messages.error(
-            request,
-            f"PDF generation not available. Install WeasyPrint for PDF reports. Error: {e}",
-        )
-        return render(request, "members/reports/current_members.html", context)
-
-    except Exception as e:
-        # Other PDF generation errors
-        from django.contrib import messages
-
-        messages.error(request, f"Error generating PDF: {e}")
-        return render(request, "members/reports/current_members.html", context)
 
 
 @staff_member_required

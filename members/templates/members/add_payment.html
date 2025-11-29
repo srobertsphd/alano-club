@@ -346,9 +346,10 @@
                             <!-- Mobile: Stack buttons vertically -->
                             <div class="d-block d-md-none">
                                 <div class="d-grid gap-2">
-                                    <form method="post" action="?step=process">
+                                    <form method="post" action="?step=process" id="confirm-form-mobile">
                                         {% csrf_token %}
                                         <input type="hidden" name="confirm" value="yes">
+                                        <input type="hidden" name="override_expiration" id="override-expiration-hidden-mobile">
                                         <button type="submit" class="btn btn-success btn-lg">
                                             <i class="bi bi-check-circle me-1"></i>
                                             Confirm & Process Payment
@@ -390,9 +391,10 @@
                                             Cancel
                                         </button>
                                     </form>
-                                    <form method="post" action="?step=process" style="display: inline;">
+                                    <form method="post" action="?step=process" style="display: inline;" id="confirm-form-desktop">
                                         {% csrf_token %}
                                         <input type="hidden" name="confirm" value="yes">
+                                        <input type="hidden" name="override_expiration" id="override-expiration-hidden-desktop">
                                         <button type="submit" class="btn btn-success">
                                             <i class="bi bi-check-circle me-1"></i>
                                             Confirm & Process Payment
@@ -564,6 +566,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         dateSelect.appendChild(option);
+    }
+    
+    // Copy override_expiration value to hidden fields when forms are submitted
+    const confirmFormMobile = document.getElementById('confirm-form-mobile');
+    const confirmFormDesktop = document.getElementById('confirm-form-desktop');
+    const overrideHiddenMobile = document.getElementById('override-expiration-hidden-mobile');
+    const overrideHiddenDesktop = document.getElementById('override-expiration-hidden-desktop');
+    
+    if (confirmFormMobile && overrideHiddenMobile) {
+        confirmFormMobile.addEventListener('submit', function() {
+            overrideHiddenMobile.value = dateSelect.value;
+        });
+    }
+    
+    if (confirmFormDesktop && overrideHiddenDesktop) {
+        confirmFormDesktop.addEventListener('submit', function() {
+            overrideHiddenDesktop.value = dateSelect.value;
+        });
     }
 });
 </script>

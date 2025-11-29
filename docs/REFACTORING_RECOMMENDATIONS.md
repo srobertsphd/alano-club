@@ -518,3 +518,169 @@ After each step, test the following:
 4. Test after each step
 5. Add new feature (payment to member creation) after Step 4
 
+---
+
+## Future Enhancement: Override Expiration Date Selection
+
+**Status:** Planned enhancement after Steps 3-6 are complete
+
+### Current Limitation
+
+The override expiration date dropdown in the payment confirmation page (`add_payment.html`) currently only allows selection of dates within 6 months forward from the calculated expiration date. This is implemented in JavaScript (lines 533-568 of `add_payment.html`).
+
+### Desired Enhancement
+
+Allow users to select **any month and year** for the override expiration date, with the system automatically setting the date to the **last day of the selected month**.
+
+### Implementation Steps
+
+#### Step 1: Update Template UI (`members/templates/members/add_payment.html`)
+
+**Current:** Single dropdown with 6 months of options (lines 332-334, 533-568)
+
+**Change to:** Two separate dropdowns:
+- Month dropdown (January - December)
+- Year dropdown (current year ± reasonable range, e.g., current year to 5 years forward)
+
+**Location:** Lines 330-336 (HTML structure) and lines 533-568 (JavaScript)
+
+**Implementation:**
+```html
+<!-- Replace single select with two dropdowns -->
+<dt class="col-sm-5">New Expires:</dt>
+<dd class="col-sm-7">
+    <div class="row g-2">
+        <div class="col-6">
+            <select class="form-select" id="override-month-select" name="override_month">
+                <!-- Populated by JavaScript -->
+            </select>
+        </div>
+        <div class="col-6">
+            <select class="form-select" id="override-year-select" name="override_year">
+                <!-- Populated by JavaScript -->
+            </select>
+        </div>
+    </div>
+    <small class="form-text text-muted">All dates are automatically set to the last day of the selected month</small>
+</dd>
+```
+
+**JavaScript Changes:**
+- Remove the 6-month loop (lines 541-567)
+- Create month dropdown with all 12 months
+- Create year dropdown with range (e.g., current year to 5 years forward)
+- Set default values to calculated expiration date's month/year
+- When month/year changes, calculate end-of-month date and store in hidden field
+
+---
+
+#### Step 2: Enhance PaymentService (`members/services.py`)
+
+**Current:** `calculate_expiration()` accepts `override_expiration` as a date string
+
+**Enhancement:** Add support for month/year override parameters
+
+**Method Signature Update:**
+```python
+@staticmethod
+def calculate_expiration(member, payment_amount, override_expiration=None, override_month=None, override_year=None):
+    """
+    Calculate new expiration date based on payment amount.
+    
+    Args:
+        member: Member instance
+        payment_amount: Decimal payment amount
+        override_expiration: Optional date to override calculation (legacy support)
+        override_month: Optional month (1-12) for override
+        override_year: Optional year for override
+        
+    Returns:
+        date: New expiration date
+    """
+    # Priority: override_expiration > override_month/year > calculation
+    if override_expiration:
+        return override_expiration
+    
+    if override_month and override_year:
+        # Use ensure_end_of_month utility to get last day of selected month
+        from .utils import ensure_end_of_month
+        from datetime import date
+        override_date = date(override_year, override_month, 1)  # Use day 1, then ensure end of month
+        return ensure_end_of_month(override_date)
+    
+    # ... rest of calculation logic
+```
+
+---
+
+#### Step 3: Update View (`members/views.py`)
+
+**Location:** `add_payment_view()` - "confirm" step (around line 262-267)
+
+**Current:**
+```python
+override_expiration = request.POST.get("override_expiration")
+if override_expiration:
+    new_expiration = datetime.strptime(override_expiration, "%Y-%m-%d").date()
+```
+
+**Change to:**
+```python
+# Check for override expiration (support both old and new format)
+override_expiration = request.POST.get("override_expiration")
+override_month = request.POST.get("override_month")
+override_year = request.POST.get("override_year")
+
+# Use PaymentService to calculate expiration
+from .services import PaymentService
+
+new_expiration = PaymentService.calculate_expiration(
+    member,
+    amount,
+    override_expiration=datetime.strptime(override_expiration, "%Y-%m-%d").date() if override_expiration else None,
+    override_month=int(override_month) if override_month else None,
+    override_year=int(override_year) if override_year else None,
+)
+```
+
+**Note:** Maintain backward compatibility with old `override_expiration` format for existing code/tests.
+
+---
+
+#### Step 4: Update Tests (`tests/test_payment_service.py`)
+
+Add tests for month/year override functionality:
+
+```python
+def test_calculate_expiration_with_month_year_override(self):
+    """Test that month/year override sets expiration to end of selected month"""
+    # Test various months (including February leap year)
+    # Test year boundaries
+    # Verify end-of-month is correctly calculated
+```
+
+---
+
+### Benefits
+
+- **Flexibility:** Users can set expiration to any month/year, not limited to 6 months
+- **Consistency:** Uses existing `ensure_end_of_month()` utility
+- **Better UX:** Clear month/year selection instead of scrolling through dates
+- **Backward Compatible:** Old date string format still works
+
+### Estimated Time
+
+- Template changes: ~20 minutes
+- Service enhancement: ~15 minutes
+- View updates: ~10 minutes
+- Testing: ~15 minutes
+- **Total: ~60 minutes**
+
+### Dependencies
+
+- **Requires:** Step 3 (PaymentService) to be complete
+- **Uses:** `ensure_end_of_month()` utility from Step 1
+- **Best done:** After Steps 3-6 are complete, as a focused enhancement
+
+---
+
