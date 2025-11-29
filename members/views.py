@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from .models import Member, Payment, PaymentMethod, MemberType
 from .utils import ensure_end_of_month, add_months_to_date
-from .services import PaymentService
+from .services import PaymentService, MemberService
 
 
 @staff_member_required
@@ -434,23 +434,8 @@ def add_member_view(request):
         # Step 1: Member Form
         member_types = MemberType.objects.all()
 
-        # Get next available member ID and suggestions efficiently
-        # Get all used member IDs in one query
-        used_ids = set(
-            Member.objects.filter(status="active", member_id__isnull=False).values_list(
-                "member_id", flat=True
-            )
-        )
-
-        # Find next 5 available IDs efficiently
-        suggested_ids = []
-        for id_num in range(1, 1001):  # Search range 1-1000
-            if id_num not in used_ids:
-                suggested_ids.append(id_num)
-                if len(suggested_ids) >= 5:
-                    break
-
-        next_member_id = suggested_ids[0] if suggested_ids else 1
+        # Get next available member ID and suggestions using MemberService
+        next_member_id, suggested_ids = MemberService.get_suggested_ids(count=5)
 
         context = {
             "step": "form",
@@ -567,33 +552,8 @@ def add_member_view(request):
                 return redirect("members:add_member")
 
             try:
-                # Get member type
-                member_type = get_object_or_404(
-                    MemberType, pk=member_data["member_type_id"]
-                )
-
-                # Create the member record with specific member_id
-                member = Member.objects.create_new_member(
-                    first_name=member_data["first_name"],
-                    last_name=member_data["last_name"],
-                    email=member_data["email"],
-                    member_type=member_type,
-                    milestone_date=datetime.fromisoformat(
-                        member_data["milestone_date"]
-                    ).date(),
-                    date_joined=datetime.fromisoformat(
-                        member_data["date_joined"]
-                    ).date(),
-                    home_address=member_data["home_address"],
-                    home_city=member_data["home_city"],
-                    home_state=member_data["home_state"],
-                    home_zip=member_data["home_zip"],
-                    home_phone=member_data["home_phone"],
-                    expiration_date=datetime.fromisoformat(
-                        member_data["initial_expiration"]
-                    ).date(),
-                    member_id=member_data["member_id"],
-                )
+                # Create member using MemberService
+                member = MemberService.create_member(member_data)
 
                 # Clear session data
                 if "member_data" in request.session:

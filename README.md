@@ -102,6 +102,16 @@ python scripts/clean_member_payments.py
 - 10 member types
 - 11 payment methods
 
+## Testing
+
+After setting up the server, see [TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive manual testing instructions. This guide includes:
+- Step-by-step testing procedures for all features
+- What to test and verify for each workflow
+- Quick test checklists
+- Common issues to check
+
+For automated testing, see `tests/README.md`.
+
 ## Next Steps
 
-See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup, database configuration, and deployment instructions.
+See [SETUP_INSTRUCTIONS.md](docs/SETUP_INSTRUCTIONS.md) for detailed setup, database configuration, and deployment instructions.
