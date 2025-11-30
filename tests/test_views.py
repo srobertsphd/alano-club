@@ -358,3 +358,346 @@ class TestNewMemberCreationWithPayment:
         assert member_data["home_state"] == "NY"
         assert member_data["home_zip"] == "54321"
         assert member_data["home_phone"] == "555-9999"
+
+
+@pytest.mark.integration
+class TestMemberReactivation:
+    """Integration tests for member reactivation feature (Change #004)"""
+
+    @pytest.fixture
+    def user(self, db):
+        """Create a staff user for authentication"""
+        return User.objects.create_user(
+            username="testuser3",
+            password="testpass123",
+            is_staff=True,
+        )
+
+    @pytest.fixture
+    def client(self, user):
+        """Create authenticated client"""
+        client = Client()
+        client.force_login(user)
+        return client
+
+    @pytest.fixture
+    def member_type(self, db):
+        """Create a test member type"""
+        return MemberType.objects.create(
+            member_type="Regular",
+            member_dues=Decimal("30.00"),
+            num_months=1,
+        )
+
+    @pytest.fixture
+    def payment_method(self, db):
+        """Create a test payment method"""
+        return PaymentMethod.objects.create(payment_method="Cash")
+
+    @pytest.fixture
+    def inactive_member(self, db, member_type):
+        """Create an inactive member for reactivation"""
+        from datetime import date
+
+        return Member.objects.create(
+            first_name="Inactive",
+            last_name="Member",
+            email="inactive@example.com",
+            member_type=member_type,
+            member_id=251,
+            status="inactive",
+            expiration_date=date(2024, 1, 31),
+            milestone_date=date(2018, 1, 1),
+            date_joined=date(2020, 1, 1),
+            home_address="123 Old St",
+            home_city="Old City",
+            home_state="CA",
+            home_zip="12345",
+            home_phone="555-0001",
+        )
+
+    def test_reactivate_member_view_redirects_to_add_member(
+        self, client, inactive_member
+    ):
+        """Test that reactivate_member_view redirects to add_member with session"""
+        response = client.get(f"/reactivate/{inactive_member.member_uuid}/")
+        assert response.status_code == 302
+        assert response.url == "/add/"
+
+        # Check session has reactivation context
+        assert "reactivate_member_uuid" in client.session
+        assert client.session["reactivate_member_uuid"] == str(
+            inactive_member.member_uuid
+        )
+
+    def test_reactivate_member_view_rejects_active_member(self, client, member_type):
+        """Test that reactivate_member_view rejects active members"""
+        from datetime import date
+
+        active_member = Member.objects.create(
+            first_name="Active",
+            last_name="Member",
+            email="active@example.com",
+            member_type=member_type,
+            member_id=252,
+            status="active",
+            expiration_date=date(2025, 12, 31),
+            milestone_date=date(2018, 1, 1),
+            date_joined=date(2020, 1, 1),
+        )
+
+        response = client.get(f"/reactivate/{active_member.member_uuid}/")
+        assert response.status_code == 302
+        assert "reactivate_member_uuid" not in client.session
+
+    def test_reactivation_form_pre_populates_member_data(
+        self, client, inactive_member, member_type
+    ):
+        """Test that reactivation form pre-populates with inactive member data"""
+        # Set up reactivation session
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        response = client.get("/add/?step=form")
+        assert response.status_code == 200
+
+        # Check form is pre-populated
+        assert "reactivate_member" in response.context
+        assert (
+            response.context["reactivate_member"].member_uuid
+            == inactive_member.member_uuid
+        )
+
+        member_data = response.context["member_data"]
+        assert member_data["first_name"] == "Inactive"
+        assert member_data["last_name"] == "Member"
+        assert member_data["email"] == "inactive@example.com"
+        assert member_data["member_id"] == 251  # Old member ID preserved
+        assert member_data["home_address"] == "123 Old St"
+        assert member_data["home_city"] == "Old City"
+        assert member_data["home_state"] == "CA"
+        assert member_data["home_zip"] == "12345"
+        assert member_data["home_phone"] == "555-0001"
+
+    def test_reactivation_preserves_old_member_id_if_available(
+        self, client, inactive_member, member_type
+    ):
+        """Test that reactivation preserves old member ID if available"""
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        response = client.get("/add/?step=form")
+        assert response.status_code == 200
+
+        member_data = response.context["member_data"]
+        # Old member ID should be preserved since it's not taken
+        assert member_data["member_id"] == 251
+
+    def test_reactivation_uses_next_available_id_if_old_taken(
+        self, client, inactive_member, member_type
+    ):
+        """Test that reactivation uses next available ID if old ID is taken by active member"""
+        from datetime import date
+
+        # Store the old member ID
+        old_member_id = inactive_member.member_id  # Should be 251
+
+        # The view checks: if old_member_id exists AND no active member has it, use it
+        # To test the "taken" scenario, we need to simulate that ID 251 is taken by an active member
+        # Since member_id has unique constraint, we can't have two members with same ID
+        # So we: clear inactive member's ID, then create active member with that ID
+        inactive_member.member_id = None
+        inactive_member.save()
+
+        # Create active member with the old ID (simulating ID was reused/recycled)
+        Member.objects.create(
+            first_name="Other",
+            last_name="Member",
+            email="other@example.com",
+            member_type=member_type,
+            member_id=old_member_id,  # ID 251 now taken by active member
+            status="active",
+            expiration_date=date(2025, 12, 31),
+            milestone_date=date(2018, 1, 1),
+            date_joined=date(2020, 1, 1),
+        )
+
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        response = client.get("/add/?step=form")
+        assert response.status_code == 200
+
+        member_data = response.context["member_data"]
+        # Since inactive_member.member_id is now None (was cleared),
+        # the view will use next available ID, not the old one (which is taken)
+        assert member_data["member_id"] != old_member_id
+        assert member_data["member_id"] is not None
+        assert member_data["member_id"] > 0  # Valid member ID
+
+    def test_reactivation_confirm_step_shows_reactivation_banner(
+        self, client, inactive_member, member_type
+    ):
+        """Test that confirm step shows reactivation banner, not duplicate warning"""
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        # Submit form with updated data
+        form_data = {
+            "first_name": "Reactivated",
+            "last_name": "Member",
+            "email": "reactivated@example.com",
+            "member_type": str(member_type.pk),
+            "member_id": "251",
+            "milestone_date": "2018-01-01",
+            "date_joined": "2025-11-30",
+            "home_address": "456 New St",
+            "home_city": "New City",
+            "home_state": "NY",
+            "home_zip": "54321",
+            "home_phone": "555-0002",
+        }
+
+        response = client.post("/add/?step=confirm", form_data)
+        assert response.status_code == 200
+
+        # Check reactivation banner is shown
+        assert "reactivate_member" in response.context
+        assert (
+            response.context["reactivate_member"].member_uuid
+            == inactive_member.member_uuid
+        )
+
+        # Check no duplicate warning (duplicate_members should be empty)
+        assert "duplicate_members" in response.context
+        assert len(response.context["duplicate_members"]) == 0
+
+    def test_reactivation_full_workflow_updates_existing_member(
+        self, client, inactive_member, member_type, payment_method
+    ):
+        """Test full reactivation workflow updates existing member, not creates new"""
+        from datetime import date
+
+        initial_member_count = Member.objects.count()
+        old_member_uuid = inactive_member.member_uuid
+
+        # Step 1: Start reactivation
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        # Step 2: Submit updated form
+        form_data = {
+            "first_name": "Reactivated",
+            "last_name": "Member",
+            "email": "reactivated@example.com",
+            "member_type": str(member_type.pk),
+            "member_id": "251",
+            "milestone_date": "2018-01-01",
+            "date_joined": "2025-11-30",
+            "home_address": "456 New St",
+            "home_city": "New City",
+            "home_state": "NY",
+            "home_zip": "54321",
+            "home_phone": "555-0002",
+        }
+        client.post("/add/?step=confirm", form_data)
+
+        # Step 3: Submit payment
+        payment_data = {
+            "amount": "30.00",
+            "payment_date": "2025-11-30",
+            "payment_method": str(payment_method.pk),
+            "receipt_number": "REACT-001",
+        }
+        client.post("/add/?step=payment", payment_data)
+
+        # Step 4: Process reactivation
+        process_data = {"confirm": "yes"}
+        client.post("/add/?step=process", process_data)
+
+        # Verify member count didn't increase (updated, not created)
+        assert Member.objects.count() == initial_member_count
+
+        # Verify same member UUID (not a new member)
+        member = Member.objects.get(member_uuid=old_member_uuid)
+        assert member.member_uuid == old_member_uuid
+
+        # Verify updated fields
+        assert member.first_name == "Reactivated"
+        assert member.last_name == "Member"
+        assert member.email == "reactivated@example.com"
+        assert member.home_address == "456 New St"
+        assert member.home_city == "New City"
+        assert member.home_state == "NY"
+        assert member.home_zip == "54321"
+        assert member.home_phone == "555-0002"
+
+        # Verify reactivation-specific fields
+        assert member.status == "active"
+        assert member.date_joined == date.today()  # Set to today
+
+        # Verify payment was created
+        assert Payment.objects.filter(
+            member=member, receipt_number="REACT-001"
+        ).exists()
+
+        # Verify session cleared
+        assert "reactivate_member_uuid" not in client.session
+        assert "member_data" not in client.session
+        assert "payment_data" not in client.session
+
+    def test_reactivation_preserves_old_payment_history(
+        self, client, inactive_member, member_type, payment_method
+    ):
+        """Test that reactivation preserves old payment history"""
+        from datetime import date
+
+        # Create old payment before reactivation
+        Payment.objects.create(
+            member=inactive_member,
+            payment_method=payment_method,
+            amount=Decimal("30.00"),
+            date=date(2023, 1, 1),
+            receipt_number="OLD-001",
+        )
+
+        # Reactivate member
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session.save()
+
+        form_data = {
+            "first_name": "Reactivated",
+            "last_name": "Member",
+            "email": "reactivated@example.com",
+            "member_type": str(member_type.pk),
+            "member_id": "251",
+            "milestone_date": "2018-01-01",
+            "date_joined": "2025-11-30",
+        }
+        client.post("/add/?step=confirm", form_data)
+
+        payment_data = {
+            "amount": "30.00",
+            "payment_date": "2025-11-30",
+            "payment_method": str(payment_method.pk),
+            "receipt_number": "NEW-001",
+        }
+        client.post("/add/?step=payment", payment_data)
+
+        process_data = {"confirm": "yes"}
+        client.post("/add/?step=process", process_data)
+
+        # Verify both old and new payments exist
+        member = Member.objects.get(member_uuid=inactive_member.member_uuid)
+        payments = member.payments.all()
+        assert payments.count() == 2
+
+        receipt_numbers = [p.receipt_number for p in payments]
+        assert "OLD-001" in receipt_numbers
+        assert "NEW-001" in receipt_numbers

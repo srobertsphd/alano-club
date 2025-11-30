@@ -166,13 +166,20 @@
         </div>
     </div>
 
-    <!-- Add Payment Button -->
+    <!-- Add Payment / Reactivate Button -->
     <div class="row mb-4">
         <div class="col-12 text-center">
-            <a href="{% url 'members:add_payment' %}?member={{ member.member_uuid }}" class="btn btn-success btn-lg">
-                <i class="bi bi-plus-circle me-2"></i>
-                Add Payment for {{ member.full_name }}
-            </a>
+            {% if member.status == 'active' %}
+                <a href="{% url 'members:add_payment' %}?member={{ member.member_uuid }}" class="btn btn-success btn-lg">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Add Payment for {{ member.full_name }}
+                </a>
+            {% elif member.status == 'inactive' %}
+                <a href="{% url 'members:reactivate_member' member.member_uuid %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Reactivate Member
+                </a>
+            {% endif %}
         </div>
     </div>
 
@@ -254,7 +261,7 @@
                                         </td>
                                         <td>
                                             {% if payment.receipt_number %}
-                                                {{ payment.receipt_number|floatformat:"0" }}
+                                                {{ payment.receipt_number }}
                                             {% else %}
                                                 <span class="text-muted">—</span>
                                             {% endif %}

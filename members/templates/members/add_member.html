@@ -3,9 +3,9 @@
 
 {% block title %}
     {% if step == 'form' %}
-        Add New Member
+        {% if reactivate_member %}Reactivate Member{% else %}Add New Member{% endif %}
     {% elif step == 'confirm' %}
-        Confirm Member Details
+        {% if reactivate_member %}Confirm Reactivation{% else %}Confirm Member Details{% endif %}
     {% endif %}
 {% endblock %}
 
@@ -18,9 +18,9 @@
                     <h1 class="h3 mb-0">
                         <i class="bi bi-person-plus-fill me-2"></i>
                         {% if step == 'form' %}
-                            Add New Member
+                            {% if reactivate_member %}Reactivate Member{% else %}Add New Member{% endif %}
                         {% elif step == 'confirm' %}
-                            Confirm Member Details
+                            {% if reactivate_member %}Confirm Reactivation{% else %}Confirm Member Details{% endif %}
                         {% endif %}
                     </h1>
                 </div>
@@ -28,6 +28,15 @@
                     
                     <!-- Step 1: Member Form -->
                     {% if step == 'form' %}
+                        {% if reactivate_member %}
+                        <div class="alert alert-info mb-4">
+                            <h5 class="alert-heading">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Reactivating Member
+                            </h5>
+                            <p class="mb-0">Please check all of the fields and modify from the previous values as needed.</p>
+                        </div>
+                        {% endif %}
+                        
                         <form method="post" action="?step=confirm">
                             {% csrf_token %}
                             
@@ -233,12 +242,19 @@
                     
                     <!-- Step 2: Confirmation -->
                     {% elif step == 'confirm' %}
+                        {% if reactivate_member %}
+                        <div class="alert alert-primary" role="alert">
+                            <h5><i class="bi bi-person-check me-2"></i>Reactivating: {{ reactivate_member.full_name }}</h5>
+                            <p class="mb-0">This member will be reactivated with the updated information shown below.</p>
+                        </div>
+                        {% else %}
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
                             Please review the member details below and proceed to payment to complete member creation.
                         </div>
+                        {% endif %}
                         
-                        {% if duplicate_members %}
+                        {% if not reactivate_member and duplicate_members %}
                         <div class="alert alert-warning" role="alert">
                             <h5><i class="bi bi-exclamation-triangle me-2"></i>Potential Duplicate Member Found</h5>
                             <p>The following existing member(s) match the information provided:</p>
@@ -349,10 +365,17 @@
                     
                     <!-- Step 3: Payment Form -->
                     {% elif step == 'payment' %}
+                        {% if reactivate_member %}
+                        <div class="alert alert-primary" role="alert">
+                            <h5><i class="bi bi-person-check me-2"></i>Getting payment information for reactivated member: {{ reactivate_member.full_name }}</h5>
+                            <p class="mb-0">Expiration date will be calculated based on payment amount.</p>
+                        </div>
+                        {% else %}
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
                             Enter payment information for the new member. Expiration date will be calculated based on payment amount.
                         </div>
+                        {% endif %}
                         
                         <!-- Member Type Info -->
                         <div class="row mb-4">
@@ -490,10 +513,17 @@
                     
                     <!-- Step 4: Payment Confirmation -->
                     {% elif step == 'payment_confirm' %}
+                        {% if reactivate_member %}
+                        <div class="alert alert-primary" role="alert">
+                            <h5><i class="bi bi-person-check me-2"></i>Reactivating: {{ reactivate_member.full_name }}</h5>
+                            <p class="mb-0">Please review the payment details below and confirm to reactivate the member with initial payment.</p>
+                        </div>
+                        {% else %}
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>
                             Please review the payment details below and confirm to create the member with initial payment.
                         </div>
+                        {% endif %}
                         
                         <div class="row">
                             <div class="col-md-6 mb-3">

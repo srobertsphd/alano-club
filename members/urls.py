@@ -10,6 +10,11 @@ urlpatterns = [
     path("<uuid:member_uuid>/", views.member_detail_view, name="member_detail"),
     # Member management
     path("add/", views.add_member_view, name="add_member"),
+    path(
+        "reactivate/<uuid:member_uuid>/",
+        views.reactivate_member_view,
+        name="reactivate_member",
+    ),
     # Reports
     path(
         "reports/current-members/",

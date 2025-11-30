@@ -11,6 +11,19 @@ from ..services import MemberService, PaymentService
 
 
 @staff_member_required
+def reactivate_member_view(request, member_uuid):
+    """Redirect to add_member flow with reactivation context"""
+    member = get_object_or_404(Member, member_uuid=member_uuid)
+
+    if member.status != "inactive":
+        messages.error(request, "Only inactive members can be reactivated.")
+        return redirect("members:member_detail", member_uuid=member_uuid)
+
+    request.session["reactivate_member_uuid"] = str(member_uuid)
+    return redirect("members:add_member")
+
+
+@staff_member_required
 def member_detail_view(request, member_uuid):
     """Member detail page with payment history and optional date filtering"""
     member = get_object_or_404(Member, member_uuid=member_uuid)
@@ -65,19 +78,65 @@ def add_member_view(request):
         # Step 1: Member Form
         member_types = MemberType.objects.all()
 
-        # Get next available member ID and suggestions using MemberService
+        # Check for reactivation mode
+        reactivate_uuid = request.session.get("reactivate_member_uuid")
+        member_data = request.session.get("member_data", {})
+        reactivate_member = None
+
+        # Get next available member ID and suggestions
         next_member_id, suggested_ids = MemberService.get_suggested_ids(count=5)
 
-        # Check if member_data exists in session (user went back from later steps)
-        member_data = request.session.get("member_data", {})
+        if reactivate_uuid and not member_data:
+            # Pre-populate from inactive member
+            reactivate_member = get_object_or_404(Member, member_uuid=reactivate_uuid)
+            if reactivate_member.status != "inactive":
+                messages.error(request, "Only inactive members can be reactivated.")
+                del request.session["reactivate_member_uuid"]
+                return redirect("members:member_detail", member_uuid=reactivate_uuid)
+
+            # Check if old member ID is available
+            old_member_id = reactivate_member.member_id
+            if (
+                old_member_id
+                and not Member.objects.filter(
+                    status="active", member_id=old_member_id
+                ).exists()
+            ):
+                # Old ID is available, use it
+                member_id_to_use = old_member_id
+            else:
+                # Old ID taken or doesn't exist, use next available
+                member_id_to_use = next_member_id
+
+            # Pre-populate member_data from inactive member
+            member_data = {
+                "first_name": reactivate_member.first_name,
+                "last_name": reactivate_member.last_name,
+                "email": reactivate_member.email,
+                "member_type_id": str(reactivate_member.member_type.pk),
+                "member_id": member_id_to_use,
+                "milestone_date": reactivate_member.milestone_date.isoformat()
+                if reactivate_member.milestone_date
+                else "",
+                "date_joined": date.today().isoformat(),  # Set to today for reactivation
+                "home_address": reactivate_member.home_address,
+                "home_city": reactivate_member.home_city,
+                "home_state": reactivate_member.home_state,
+                "home_zip": reactivate_member.home_zip,
+                "home_phone": reactivate_member.home_phone,
+            }
+            request.session["member_data"] = member_data
 
         context = {
             "step": "form",
             "member_types": member_types,
             "today": date.today(),
-            "next_member_id": next_member_id,
+            "next_member_id": member_data.get("member_id", next_member_id)
+            if member_data
+            else next_member_id,
             "suggested_ids": suggested_ids,
-            "member_data": member_data,  # Pass session data to pre-populate form
+            "member_data": member_data,
+            "reactivate_member": reactivate_member if reactivate_uuid else None,
         }
         return render(request, "members/add_member.html", context)
 
@@ -129,10 +188,21 @@ def add_member_view(request):
                 ).date()
                 date_joined_obj = datetime.strptime(date_joined, "%Y-%m-%d").date()
 
-                # Check for duplicate members
-                duplicate_members = MemberService.check_duplicate_members(
-                    first_name, last_name, email, home_phone
-                )
+                # Check if reactivating
+                reactivate_uuid = request.session.get("reactivate_member_uuid")
+                reactivate_member = None
+                duplicate_members = []
+
+                if reactivate_uuid:
+                    # Reactivation mode - skip duplicate detection, load reactivate member info
+                    reactivate_member = get_object_or_404(
+                        Member, member_uuid=reactivate_uuid
+                    )
+                else:
+                    # New member mode - check for duplicates
+                    duplicate_members = MemberService.check_duplicate_members(
+                        first_name, last_name, email, home_phone
+                    )
 
                 # Store in session for final processing
                 request.session["member_data"] = {
@@ -165,6 +235,7 @@ def add_member_view(request):
                     "home_zip": home_zip,
                     "home_phone": home_phone,
                     "duplicate_members": duplicate_members,
+                    "reactivate_member": reactivate_member,
                 }
                 return render(request, "members/add_member.html", context)
 
@@ -197,12 +268,21 @@ def add_member_view(request):
                     )
                 )
 
+                # Check if reactivating
+                reactivate_uuid = request.session.get("reactivate_member_uuid")
+                reactivate_member = None
+                if reactivate_uuid:
+                    reactivate_member = get_object_or_404(
+                        Member, member_uuid=reactivate_uuid
+                    )
+
                 context = {
                     "step": "payment",
                     "member_type": member_type,
                     "payment_methods": payment_methods,
                     "suggested_amount": suggested_amount,
                     "today": date.today(),
+                    "reactivate_member": reactivate_member,
                 }
                 return render(request, "members/add_member.html", context)
 
@@ -265,6 +345,14 @@ def add_member_view(request):
                     "new_expiration": new_expiration.isoformat(),
                 }
 
+                # Check if reactivating
+                reactivate_uuid = request.session.get("reactivate_member_uuid")
+                reactivate_member = None
+                if reactivate_uuid:
+                    reactivate_member = get_object_or_404(
+                        Member, member_uuid=reactivate_uuid
+                    )
+
                 # Show payment confirmation
                 context = {
                     "step": "payment_confirm",
@@ -273,6 +361,7 @@ def add_member_view(request):
                     "payment_method": payment_method,
                     "receipt_number": receipt_number,
                     "new_expiration": new_expiration,
+                    "reactivate_member": reactivate_member,
                 }
                 return render(request, "members/add_member.html", context)
 
@@ -293,6 +382,7 @@ def add_member_view(request):
         if request.method == "POST" and request.POST.get("confirm") == "yes":
             member_data = request.session.get("member_data")
             payment_data = request.session.get("payment_data")
+            reactivate_uuid = request.session.get("reactivate_member_uuid")
 
             if not member_data:
                 messages.error(request, "Member session expired. Please try again.")
@@ -303,31 +393,95 @@ def add_member_view(request):
                 return redirect("members:add_member")
 
             try:
-                # Add expiration date from payment_data to member_data
-                # (create_member expects "initial_expiration" in member_data)
-                member_data["initial_expiration"] = payment_data["new_expiration"]
+                # Check if reactivation mode
+                if reactivate_uuid:
+                    # Update existing inactive member
+                    member = get_object_or_404(Member, member_uuid=reactivate_uuid)
+                    if member.status != "inactive":
+                        messages.error(request, "Member is no longer inactive.")
+                        return redirect(
+                            "members:member_detail", member_uuid=reactivate_uuid
+                        )
 
-                # Create member using MemberService
-                member = MemberService.create_member(member_data)
+                    # Get member type
+                    member_type = get_object_or_404(
+                        MemberType, pk=member_data["member_type_id"]
+                    )
 
-                # Create payment record linked to new member using PaymentService
-                payment, was_inactive = PaymentService.process_payment(
-                    member, payment_data
-                )
+                    # Handle member ID - preserve if available, otherwise use next available
+                    requested_member_id = member_data["member_id"]
+                    if (
+                        Member.objects.filter(
+                            status="active", member_id=requested_member_id
+                        )
+                        .exclude(member_uuid=member.member_uuid)
+                        .exists()
+                    ):
+                        # Requested ID is taken by another member, use next available
+                        next_member_id, _ = MemberService.get_suggested_ids(count=1)
+                        member.member_id = next_member_id
+                    else:
+                        # Requested ID is available, use it
+                        member.member_id = requested_member_id
 
-                # Clear both session data entries
-                if "member_data" in request.session:
-                    del request.session["member_data"]
-                if "payment_data" in request.session:
-                    del request.session["payment_data"]
+                    # Update all fields
+                    member.first_name = member_data["first_name"]
+                    member.last_name = member_data["last_name"]
+                    member.email = member_data["email"]
+                    member.member_type = member_type
+                    member.milestone_date = datetime.fromisoformat(
+                        member_data["milestone_date"]
+                    ).date()
+                    member.date_joined = date.today()  # Set to today for reactivation
+                    member.home_address = member_data["home_address"]
+                    member.home_city = member_data["home_city"]
+                    member.home_state = member_data["home_state"]
+                    member.home_zip = member_data["home_zip"]
+                    member.home_phone = member_data["home_phone"]
+                    member.expiration_date = datetime.fromisoformat(
+                        payment_data["new_expiration"]
+                    ).date()
+                    member.status = "active"
+                    member.save()
 
-                # Create success message
-                success_msg = f"Member {member.full_name} (#{member.member_id}) successfully created with initial payment of ${payment.amount}. Membership expires {member.expiration_date.strftime('%B %d, %Y')}."
-                messages.success(request, success_msg)
-                return redirect("members:search")
+                    # Create payment record
+                    payment, was_inactive = PaymentService.process_payment(
+                        member, payment_data
+                    )
+
+                    # Clear session data
+                    if "member_data" in request.session:
+                        del request.session["member_data"]
+                    if "payment_data" in request.session:
+                        del request.session["payment_data"]
+                    if "reactivate_member_uuid" in request.session:
+                        del request.session["reactivate_member_uuid"]
+
+                    success_msg = f"Member {member.full_name} (#{member.member_id}) successfully reactivated with initial payment of ${payment.amount}. Membership expires {member.expiration_date.strftime('%B %d, %Y')}."
+                    messages.success(request, success_msg)
+                    return redirect(
+                        "members:member_detail", member_uuid=member.member_uuid
+                    )
+                else:
+                    # Normal flow - create new member
+                    member_data["initial_expiration"] = payment_data["new_expiration"]
+                    member = MemberService.create_member(member_data)
+                    payment, was_inactive = PaymentService.process_payment(
+                        member, payment_data
+                    )
+
+                    # Clear session data
+                    if "member_data" in request.session:
+                        del request.session["member_data"]
+                    if "payment_data" in request.session:
+                        del request.session["payment_data"]
+
+                    success_msg = f"Member {member.full_name} (#{member.member_id}) successfully created with initial payment of ${payment.amount}. Membership expires {member.expiration_date.strftime('%B %d, %Y')}."
+                    messages.success(request, success_msg)
+                    return redirect("members:search")
 
             except Exception as e:
-                messages.error(request, f"Error creating member and payment: {e}")
+                messages.error(request, f"Error processing member and payment: {e}")
                 return redirect("members:add_member")
         else:
             # User cancelled or invalid request
@@ -335,6 +489,8 @@ def add_member_view(request):
                 del request.session["member_data"]
             if "payment_data" in request.session:
                 del request.session["payment_data"]
+            if "reactivate_member_uuid" in request.session:
+                del request.session["reactivate_member_uuid"]
             messages.info(request, "Member creation cancelled.")
             return redirect("members:add_member")
 

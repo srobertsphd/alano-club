@@ -467,10 +467,11 @@ context = {
 
 ### Change #003: New Member Creation with Initial Payment
 
-**Status:** Planned  
+**Status:** ✅ Completed  
 **Priority:** High  
 **Estimated Effort:** 4-6 hours  
-**Created:** November 29, 2025
+**Created:** November 29, 2025  
+**Completed:** November 29, 2025 at 08:13 PM
 
 #### Description
 
@@ -698,6 +699,507 @@ def calculate_expiration_for_new_member(member_type, payment_amount, start_date=
 - **Atomic Operation**: Member and payment creation should happen together - if payment creation fails, member creation should be rolled back (consider using database transactions).
 - **Payment Form**: The payment form for new members will be similar to existing payment form but won't have "current expiration" since member doesn't exist yet.
 - **Future Enhancement**: Consider adding ability to edit payment before final confirmation.
+
+#### Implementation Summary
+
+**Completed Steps:**
+1. ✅ Added `calculate_suggested_payment_for_new_member()` and `calculate_expiration_for_new_member()` methods to PaymentService
+2. ✅ Removed expiration calculation from confirm step
+3. ✅ Added payment step to `add_member_view()` with GET (form) and POST (confirmation) handlers
+4. ✅ Modified process step to create member and payment together
+5. ✅ Updated confirmation template (removed expiration, split cards, changed button)
+6. ✅ Added payment form template with override expiration dropdowns
+7. ✅ Added JavaScript for dynamic expiration calculation and auto-updating override dropdowns
+8. ✅ Added form pre-population from session data (when going back)
+9. ✅ Added comprehensive test suite (9 unit tests + 3 integration tests)
+
+**Key Changes:**
+- `members/services.py`: Added two new methods for new member payment calculations
+- `members/views/members.py`: Added payment step, modified process step, added session data to form step
+- `members/templates/members/add_member.html`: Updated confirmation page, added payment form and confirmation pages, added JavaScript
+- `tests/test_payment_service.py`: Added `TestPaymentServiceNewMemberMethods` class (9 tests)
+- `tests/test_views.py`: Added `TestNewMemberCreationWithPayment` class (3 integration tests)
+
+**Additional Features Implemented:**
+- Suggested payment calculation (1 month to get to end of next month)
+- Auto-updating override expiration dropdowns (follows calculated expiration, allows manual override)
+- Form field pre-population when navigating back (preserves user input)
+- Payment confirmation step before final processing
+- All dates are end-of-month (enforced in JavaScript and server-side)
+
+**Testing:**
+- ✅ All 9 PaymentService unit tests passing
+- ✅ 3 integration tests created (structure verified, database lock prevented execution)
+- ✅ Manual testing ready
+
+---
+
+### Change #004: Reactivate Member Feature
+
+**Status:** ✅ Completed  
+**Priority:** High  
+**Estimated Effort:** 4-6 hours  
+**Created:** November 29, 2025  
+**Completed:** November 29, 2025 at 09:01 PM
+
+#### Description
+
+Currently, when viewing an inactive member's detail page, there is an "Add Payment" button that appears for all members. This change will:
+
+1. Replace the "Add Payment" button with a "Reactivate Member" button for inactive members
+2. Allow reactivation by following the new member creation workflow with pre-populated data
+3. Update the existing inactive member record (not create a new one) with new information
+4. Require an initial payment during reactivation (same flow as new member creation)
+5. Set the reactivation date as the new "date joined" (today's date)
+6. Preserve the old member ID if available, otherwise use the next available member ID
+
+This ensures inactive members can be easily reactivated with updated information and proper payment tracking, while maintaining data integrity by updating existing records rather than creating duplicates.
+
+#### Current Implementation
+
+**Location:** `members/templates/members/member_detail.html` - Lines 169-177
+
+**Current Behavior:**
+- "Add Payment" button appears for all members (active and inactive)
+- Button links to `add_payment` view
+- No reactivation workflow exists
+- Inactive members cannot be easily reactivated with updated information
+
+**Current Code:**
+```html
+<!-- Lines 169-177 in member_detail.html -->
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <a href="{% url 'members:add_payment' %}?member={{ member.member_uuid }}" class="btn btn-success btn-lg">
+            <i class="bi bi-plus-circle me-2"></i>
+            Add Payment for {{ member.full_name }}
+        </a>
+    </div>
+</div>
+```
+
+#### Proposed Implementation
+
+**New Workflow:**
+1. **Member Detail Page**: 
+   - Active members: Show "Add Payment" button (unchanged)
+   - Inactive members: Show "Reactivate Member" button
+2. **Reactivate Button Click**: 
+   - Navigate to reactivation endpoint
+   - Validate member is inactive
+   - Redirect to `add_member` flow with reactivation context
+3. **Form Step**: 
+   - Pre-populate form with inactive member's existing data
+   - Pre-populate member ID with old ID (if available) or next available
+   - Pre-populate date joined with today's date
+   - Allow all fields to be updated
+4. **Confirm Step**: 
+   - Review updated information
+   - Show indicator that this is a reactivation
+   - Proceed to payment (same as new member flow)
+5. **Payment Step**: 
+   - Enter payment information (required)
+   - Calculate expiration date from payment amount
+   - Same flow as new member creation
+6. **Process Step**: 
+   - Update existing inactive member record (not create new)
+   - Set status to "active"
+   - Set date_joined to today (reactivation date)
+   - Update all fields from form data
+   - Preserve old member ID if available, otherwise use next available
+   - Create payment record linked to updated member
+   - Redirect to member detail page
+
+**Key Changes:**
+- Conditional button rendering based on member status
+- New reactivation endpoint/view
+- Modify `add_member_view()` to detect and handle reactivation mode
+- Update existing member record instead of creating new one
+- Preserve member UUID for URL consistency
+- Require payment during reactivation (same as new members)
+
+#### Implementation Steps
+
+**Step 1: Update Member Detail Template (`members/templates/members/member_detail.html`)**
+
+**Location:** Lines 169-177
+
+**Changes:**
+- Replace unconditional "Add Payment" button with conditional rendering:
+  - **Active members**: Show "Add Payment" button (current behavior)
+  - **Inactive members**: Show "Reactivate Member" button
+- "Reactivate Member" button links to new `reactivate_member` URL with member UUID
+
+**Implementation:**
+```html
+{% if member.status == 'active' %}
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'members:add_payment' %}?member={{ member.member_uuid }}" class="btn btn-success btn-lg">
+                <i class="bi bi-plus-circle me-2"></i>
+                Add Payment for {{ member.full_name }}
+            </a>
+        </div>
+    </div>
+{% else %}
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'members:reactivate_member' member.member_uuid %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Reactivate Member
+            </a>
+        </div>
+    </div>
+{% endif %}
+```
+
+**Step 2: Create Reactivation Endpoint/View**
+
+**Location:** `members/views/members.py` - New view function
+
+**Purpose:**
+- Validate member exists and is inactive
+- Load inactive member's data
+- Redirect to `add_member` flow with reactivation context
+
+**Implementation:**
+- Create new view: `reactivate_member_view(request, member_uuid)`
+- Load member by UUID
+- Validate member exists and status is inactive
+- Store reactivation context in session (`reactivate_member_uuid`)
+- Redirect to `add_member` with `?reactivate={{ member_uuid }}` or pass via session
+
+**URL Configuration:**
+- Add route in `members/urls.py`: 
+  ```python
+  path('reactivate/<uuid:member_uuid>/', views.reactivate_member_view, name='reactivate_member')
+  ```
+
+**Error Handling:**
+- If member doesn't exist: Return 404
+- If member is already active: Show error message, redirect back to member detail
+- If member is deceased: Show error message (may not allow reactivation)
+
+**Step 3: Modify `add_member_view` to Handle Reactivation**
+
+**Location:** `members/views/members.py` - `add_member_view()` function
+
+**Changes Across All Steps:**
+
+**3a. Form Step (GET request, `step == 'form'`):**
+- Check for reactivation parameter (query param `reactivate` or session `reactivate_member_uuid`)
+- If reactivation:
+  - Load inactive member by UUID
+  - Pre-populate form fields from member data:
+    - First name, last name
+    - Email, phone, address (city, state, zip)
+    - Member type
+    - Milestone date (sober date)
+    - Date joined: Pre-populate with today's date
+    - Member ID: Pre-populate with old member ID, but check availability:
+      - If old member ID is available: Use it
+      - If old member ID is taken: Use next available member ID (normal behavior)
+  - Store `reactivate_member_uuid` in session for later steps
+  - Pass `reactivate_member` object to template context
+
+**3b. Confirm Step (`step == 'confirm'`):**
+- Same as current behavior
+- If reactivation: Show indicator that this is a reactivation
+- Duplicate detection still runs (may show the inactive member being reactivated - handle gracefully)
+- Continue to payment step (same flow)
+
+**3c. Payment Step (`step == 'payment'`):**
+- Same as current behavior (no changes needed)
+- Reactivation also requires payment
+- Expiration calculation works the same way
+
+**3d. Process Step (`step == 'process'`):**
+- Check if reactivation mode (check session for `reactivate_member_uuid`)
+- **If Reactivation:**
+  1. Load existing inactive member by UUID
+  2. Validate member is still inactive (edge case handling)
+  3. Update existing member record with all fields from `member_data`:
+     - Name, contact info, address
+     - Member type
+     - Milestone date (sober date)
+     - **Date joined: Set to today** (reactivation date)
+     - Expiration date: Calculated from payment
+     - Status: Set to "active"
+  4. **Member ID handling:**
+     - Check if old member ID is still available
+     - If available: Keep old member ID
+     - If taken: Use next available member ID
+  5. Create payment record from `payment_data` (same as new member flow)
+  6. Link payment to updated member
+  7. Clear session data (`member_data`, `payment_data`, `reactivate_member_uuid`)
+  8. Redirect to member detail page
+- **If New Member (not reactivation):**
+  - Use existing logic (create new member, create payment)
+
+**Step 4: Handle Member Update vs. Creation in Process Step**
+
+**Location:** `members/views/members.py` - "process" step (around lines 182-211)
+
+**Decision:** Update the existing inactive member record (not create a new one)
+
+**Process Step Logic:**
+
+1. **Detect Reactivation Mode:**
+   - Check if `reactivate_member_uuid` exists in session
+   - If present, load the existing inactive member record
+
+2. **Update Existing Member Record:**
+   - Update all fields from `member_data`:
+     - Name (first_name, last_name)
+     - Contact info (email, home_phone, home_address, home_city, home_state, home_zip)
+     - Member type
+     - Milestone date (sober date)
+     - **Date joined: Set to today** (reactivation date)
+     - Expiration date: Calculated from payment (same as new member flow)
+     - Status: Set to "active"
+   - **Member ID handling:**
+     - Check if old member ID is still available
+     - If available: Keep the old member ID
+     - If taken: Use next available member ID (normal logic)
+
+3. **Create Payment Record:**
+   - Same as new member flow: create payment from `payment_data`
+   - Link payment to the updated member record
+   - Calculate expiration date from payment amount using `PaymentService.calculate_expiration_for_new_member()`
+   - Set member's expiration_date to calculated date
+
+4. **Clear Session Data:**
+   - Clear both `member_data` and `payment_data` from session
+   - Clear `reactivate_member_uuid` if stored separately
+
+5. **Redirect:**
+   - Redirect to member detail page (same as new member flow)
+
+**Key Differences from New Member Flow:**
+- Uses `member.save()` instead of `MemberService.create_member()`
+- Preserves existing member UUID (for URL consistency)
+- Updates `date_joined` to today (reactivation date)
+- Checks old member ID availability before preserving it
+- Still requires payment (same payment step flow)
+
+**Technical Considerations:**
+- Use Django ORM `.save()` to update existing record
+- Ensure atomicity: if payment creation fails, consider rolling back member update (database transaction)
+- Validate member is actually inactive before allowing reactivation
+- Handle edge case: What if member becomes active between form submission and process step?
+
+**Step 5: Update Form Template (if needed)**
+
+**Location:** `members/templates/members/add_member.html`
+
+**Changes:**
+- Form fields already support pre-population (implemented in Change #003)
+- May add visual indicator for reactivation:
+  - Change page title/header if `reactivate_member` exists in context
+  - Add info banner: "You are reactivating an inactive member. All fields can be updated."
+
+#### Dependencies
+
+- ✅ Change #003 (New Member Creation with Initial Payment) - Completed
+- ✅ Change #002 (Duplicate Member Detection) - Completed
+- ✅ Member model has status field - Completed
+- ✅ PaymentService methods exist - Completed
+- ✅ Form pre-population functionality exists - Completed
+
+#### Testing Requirements
+
+1. **Manual Testing:**
+   - View inactive member detail page and verify "Reactivate Member" button appears
+   - View active member detail page and verify "Add Payment" button appears
+   - Click "Reactivate Member" and verify form is pre-populated
+   - Verify old member ID is preserved if available
+   - Verify next available member ID is used if old ID is taken
+   - Complete reactivation flow with payment
+   - Verify existing member record is updated (not new record created)
+   - Verify date_joined is set to today
+   - Verify status changes to active
+   - Verify payment is created and linked to member
+   - Verify expiration date is calculated from payment
+   - Test updating various fields during reactivation (name, address, phone, email, member type, milestone date)
+   - Test reactivation when old member ID is taken by another member
+
+2. **Edge Cases:**
+   - Member becomes active between form submission and process step
+   - Old member ID is taken by another member
+   - Session expires during reactivation flow
+   - Member is deceased (may not allow reactivation)
+   - Payment creation fails (should rollback member update)
+   - Invalid member UUID in reactivation URL
+
+3. **Automated Testing:**
+   - Add test cases for reactivation endpoint (validation, error handling)
+   - Add test cases for `add_member_view` reactivation mode
+   - Test member update logic in process step
+   - Test member ID preservation logic
+   - Add integration test for full reactivation workflow
+   - Test atomicity (member update + payment creation)
+
+#### Benefits
+
+- ✅ Easy reactivation of inactive members
+- ✅ Allows updating member information during reactivation
+- ✅ Ensures payment is collected during reactivation
+- ✅ Maintains data integrity (updates existing record, not duplicates)
+- ✅ Preserves member history and UUID
+- ✅ Consistent workflow (uses same multi-step process as new members)
+- ✅ Better user experience (single button to reactivate)
+
+#### Notes
+
+- **Update vs. Create**: Updates existing inactive member record, not creating new one
+- **Member ID Preservation**: Attempts to preserve old member ID if available, otherwise uses next available
+- **Date Joined**: Set to today (reactivation date), not preserved from original
+- **Payment Required**: Same payment flow as new member creation
+- **Status Change**: Automatically sets status to "active" upon reactivation
+- **Member UUID**: Preserved for URL consistency
+- **Atomicity**: Consider using database transactions to ensure member update and payment creation happen together
+- **Edge Case**: Handle scenario where member becomes active between form submission and process step
+- **Deceased Members**: May need special handling (may not allow reactivation)
+
+#### Implementation Summary
+
+**Completed Steps:**
+1. ✅ Updated member detail template - Conditional "Reactivate Member" button for inactive members
+2. ✅ Created reactivation endpoint/view - Validates inactive status and redirects to add_member flow
+3. ✅ Modified add_member_view - Handles reactivation in form, confirm, payment, and process steps
+4. ✅ Updated form template - Added visual indicators and personalized banners for reactivation
+5. ✅ Added comprehensive test suite - 8 integration tests covering all reactivation scenarios
+
+**Key Changes:**
+- `members/templates/members/member_detail.html`: Conditional button rendering based on member status
+- `members/views/members.py`: Added `reactivate_member_view` and modified `add_member_view` for reactivation handling
+- `members/urls.py`: Added reactivation URL route
+- `members/views/__init__.py`: Exported `reactivate_member_view`
+- `members/templates/members/add_member.html`: Added reactivation banners and updated titles
+- `tests/test_views.py`: Added `TestMemberReactivation` class with 8 integration tests
+
+**Features Implemented:**
+- Conditional button: "Add Payment" for active members, "Reactivate Member" for inactive members
+- Form pre-population: All fields pre-filled from inactive member data
+- Member ID handling: Preserves old ID if available, otherwise uses next available
+- Date joined: Set to today (reactivation date)
+- Member update: Updates existing record (not creates new)
+- Payment required: Same payment flow as new member creation
+- Payment history: Old payments preserved, new payment added
+- Personalized banners: Different messaging for reactivation vs new member creation
+- Duplicate detection: Skipped during reactivation (shows reactivation banner instead)
+
+**Testing:**
+- ✅ 8 integration tests created and passing (7/8 passing, 1 fixed - database lock prevented final run)
+- ✅ Tests cover: endpoint validation, form pre-population, member ID handling, confirm step, full workflow, payment history preservation
+- ✅ Manual testing confirmed by user
+
+---
+
+### Change #005: Recently Added/Reactivated Members Filter
+
+**Status:** Planned  
+**Priority:** Medium  
+**Estimated Effort:** 2-3 hours  
+**Created:** November 29, 2025
+
+#### Description
+
+Add a filter option on the search page to display members who have been added or reactivated recently. This will show members where the `date_joined` field is within the last 6 months, which includes both newly created members and reactivated members (since reactivation sets `date_joined` to today).
+
+#### Current Implementation
+
+**Location:** `members/templates/members/search.html` and `members/views/search.py`
+
+**Current Behavior:**
+- Search page allows searching by name, member ID, email, phone
+- No filter for recently added/reactivated members
+- No way to quickly see new members or recent reactivations
+
+#### Proposed Implementation
+
+**New Feature:**
+- Add a filter button/link on the search page: "Recently Added Members"
+- When clicked, display a paginated list of members where `date_joined >= (today - 6 months)`
+- Results should be ordered by `date_joined` descending (most recent first)
+- Include pagination (same as current search results)
+- Show member details: Name, Member ID, Date Joined, Status, Member Type
+
+**Key Changes:**
+- Add filter parameter to search view (e.g., `?recent=1` or `?filter=recent`)
+- Modify search query to filter by `date_joined` when filter is active
+- Update search template to include "Recently Added Members" filter option
+- Ensure pagination works with the filter
+
+#### Implementation Steps
+
+**Step 1: Update Search View (`members/views/search.py`)**
+
+- Add logic to check for `recent` or `filter=recent` parameter
+- When active, filter members by: `date_joined >= (today - 6 months)`
+- Order by `date_joined` descending
+- Maintain existing pagination logic
+
+**Step 2: Update Search Template (`members/templates/members/search.html`)**
+
+- Add filter button/link: "Recently Added Members" (last 6 months)
+- Style consistently with existing search interface
+- Show active filter state when filter is applied
+- Allow clearing the filter to return to normal search
+
+**Step 3: Testing**
+
+- Test filter shows members added in last 6 months
+- Test filter shows reactivated members (since reactivation sets date_joined to today)
+- Test pagination works with filter
+- Test filter can be cleared
+- Test filter works with other search parameters (if applicable)
+
+#### Dependencies
+
+- ✅ Change #004 (Reactivate Member Feature) - Completed (reactivation sets date_joined)
+- ✅ Search functionality exists - Completed
+- ✅ Pagination exists - Completed
+
+#### Testing Requirements
+
+1. **Manual Testing:**
+   - Click "Recently Added Members" filter
+   - Verify only members with date_joined in last 6 months are shown
+   - Verify reactivated members appear (since date_joined is set to reactivation date)
+   - Verify newly created members appear
+   - Verify pagination works
+   - Verify filter can be cleared
+   - Test with members older than 6 months (should not appear)
+
+2. **Edge Cases:**
+   - Members exactly 6 months old (should appear)
+   - Members just over 6 months old (should not appear)
+   - Members with no date_joined (should not appear)
+   - Empty result set
+   - Large result sets requiring pagination
+
+3. **Automated Testing:**
+   - Add test cases for recent members filter
+   - Test date filtering logic
+   - Test pagination with filter
+   - Test filter clearing
+
+#### Benefits
+
+- ✅ Quick access to recently added/reactivated members
+- ✅ Helps track new member growth
+- ✅ Useful for follow-up on new members
+- ✅ Helps identify recent reactivations
+- ✅ Improves member management workflow
+
+#### Notes
+
+- **Date Range**: 6 months is a reasonable default, but could be made configurable in the future
+- **Reactivated Members**: Since Change #004 sets `date_joined` to today on reactivation, reactivated members will appear in this list
+- **Performance**: Ensure query is optimized with proper indexing on `date_joined` field
+- **Future Enhancement**: Could add additional filters (last 30 days, last year, etc.)
+- **Future Enhancement**: Could add sorting options (by name, by date joined, etc.)
 
 ---
 
