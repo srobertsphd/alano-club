@@ -1,3 +1,4 @@
+from datetime import timedelta, date
 from django.shortcuts import render
 from django.db.models import Q
 from django.contrib.admin.views.decorators import staff_member_required
@@ -17,6 +18,7 @@ def search_view(request):
     query = request.GET.get("q", "").strip()
     browse_range = request.GET.get("browse", "").strip()
     status_filter = request.GET.get("status", "all").strip()
+    recent_filter = request.GET.get("recent", "").strip()
     members = None
 
     # Get quick stats for the search page
@@ -41,8 +43,15 @@ def search_view(request):
         base_queryset = base_queryset.filter(status="inactive")
     # "all" or any other value shows all members (no additional filter)
 
+    # Handle recent filter (mutually exclusive with browse and query)
+    if recent_filter and recent_filter in ("30", "180", "365"):
+        cutoff_date = date.today() - timedelta(days=int(recent_filter))
+        members = base_queryset.filter(date_joined__gte=cutoff_date).order_by(
+            "-date_joined"
+        )
+
     # Handle alphabet browsing
-    if browse_range:
+    elif browse_range:
         # Define the letter ranges
         range_mapping = {
             "A-C": ["A", "B", "C"],
@@ -82,6 +91,7 @@ def search_view(request):
         "query": query,
         "browse_range": browse_range,
         "status_filter": status_filter,
+        "recent_filter": recent_filter,
         "members": members,
         "active_members_count": active_members_count,
         "total_payments_count": total_payments_count,

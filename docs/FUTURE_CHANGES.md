@@ -1105,101 +1105,164 @@ This ensures inactive members can be easily reactivated with updated information
 
 #### Description
 
-Add a filter option on the search page to display members who have been added or reactivated recently. This will show members where the `date_joined` field is within the last 6 months, which includes both newly created members and reactivated members (since reactivation sets `date_joined` to today).
+Add quick filter options on the search page to display members who have been added or reactivated recently. This will show members where the `date_joined` field is within a selected time period (30 days, 6 months, or 1 year), which includes both newly created members and reactivated members (since reactivation sets `date_joined` to today). Results will be ordered by `date_joined` descending (most recent first) and will display the Date Joined in the results list.
 
 #### Current Implementation
 
 **Location:** `members/templates/members/search.html` and `members/views/search.py`
 
 **Current Behavior:**
-- Search page allows searching by name, member ID, email, phone
+- Search page allows searching by name, member ID
+- Alphabet browsing by last name ranges (A-C, D-F, etc.)
+- Status filtering (active/inactive/all)
 - No filter for recently added/reactivated members
 - No way to quickly see new members or recent reactivations
+- Date Joined is not displayed in search results
+
+**Current Search Modes:**
+- Text search (`q` parameter): Searches by name or member ID
+- Alphabet browse (`browse` parameter): Filters by last name ranges
+- Status filter (`status` parameter): Filters by active/inactive/all
+- Search modes are mutually exclusive (browse OR query, not both)
 
 #### Proposed Implementation
 
 **New Feature:**
-- Add a filter button/link on the search page: "Recently Added Members"
-- When clicked, display a paginated list of members where `date_joined >= (today - 6 months)`
-- Results should be ordered by `date_joined` descending (most recent first)
-- Include pagination (same as current search results)
-- Show member details: Name, Member ID, Date Joined, Status, Member Type
+- Add "Recently Added" filter section with three quick filter buttons:
+  - "Last 30 Days" - Shows members with `date_joined >= (today - 30 days)`
+  - "Last 6 Months" - Shows members with `date_joined >= (today - 180 days)`
+  - "Last Year" - Shows members with `date_joined >= (today - 365 days)`
+- Results ordered by `date_joined` descending (most recent first)
+- Show all matching results (no limit)
+- Display Date Joined in results list
+- Works with status filter (can combine: e.g., "Last 30 Days + Active only")
+- Mutually exclusive with text search and alphabet browse (similar to existing behavior)
 
 **Key Changes:**
-- Add filter parameter to search view (e.g., `?recent=1` or `?filter=recent`)
+- Add `recent_filter` parameter to search view (values: "30", "180", "365")
 - Modify search query to filter by `date_joined` when filter is active
-- Update search template to include "Recently Added Members" filter option
-- Ensure pagination works with the filter
+- Change ordering to `-date_joined` when recent filter is active
+- Update search template to include "Recently Added" button group
+- Add Date Joined display to member results list
+- Update URL building to preserve status filter when using recent filter
 
 #### Implementation Steps
 
 **Step 1: Update Search View (`members/views/search.py`)**
 
-- Add logic to check for `recent` or `filter=recent` parameter
-- When active, filter members by: `date_joined >= (today - 6 months)`
-- Order by `date_joined` descending
-- Maintain existing pagination logic
+**Changes:**
+1. Add `recent_filter` parameter handling:
+   - Get `recent_filter` from `request.GET` (values: "30", "180", "365")
+   - Calculate cutoff date: `today - timedelta(days=int(recent_filter))`
+   - Filter queryset: `base_queryset.filter(date_joined__gte=cutoff_date)`
+2. Modify queryset ordering:
+   - When `recent_filter` is active: order by `-date_joined` (descending, most recent first)
+   - Keep existing ordering for other search modes (`last_name`, `first_name`)
+3. Integration with existing filters:
+   - `recent_filter` works independently of `query` and `browse_range`
+   - Status filter (`status_filter`) always applies regardless of search mode
+   - Priority: If `recent_filter` is set, use it (similar to how `browse_range` works)
+   - Mutually exclusive: If `recent_filter` is set, ignore `query` and `browse_range`
+4. Add `date_joined` to context for template display
+
+**Code Structure:**
+```python
+# After status filter is applied to base_queryset
+if recent_filter:
+    # Calculate cutoff date based on recent_filter value
+    # Filter by date_joined >= cutoff_date
+    # Order by -date_joined
+elif browse_range:
+    # Existing alphabet browse logic
+elif query:
+    # Existing search logic
+```
 
 **Step 2: Update Search Template (`members/templates/members/search.html`)**
 
-- Add filter button/link: "Recently Added Members" (last 6 months)
-- Style consistently with existing search interface
-- Show active filter state when filter is applied
-- Allow clearing the filter to return to normal search
+**Changes:**
+1. Add "Recently Added" button group:
+   - Place between Status Filter and Alphabet Browse sections
+   - Three buttons: "Last 30 Days", "Last 6 Months", "Last Year"
+   - Style consistently with existing filter buttons (`btn-outline-primary btn-sm`)
+   - Active state highlighting when filter is applied (`active` class)
+   - Small label: "Or view recently added members:"
+2. Update URL building:
+   - Preserve `status_filter` when clicking recent filter buttons
+   - Clear `query` and `browse_range` when recent filter is active
+   - Add "Clear Filter" link when recent filter is active (similar to browse_range)
+3. Update results display:
+   - Add "Date Joined" information to member list items
+   - Show date in readable format: "Joined: Nov 30, 2025" or "Joined: November 30, 2025"
+   - Display alongside existing info (name, ID, status, expiration)
+   - Placement: After Member Type or before Expiration date
+4. Update results header:
+   - Show "Recently Added Members" title when `recent_filter` is active
+   - Show which filter is active (e.g., "Last 30 Days")
+   - Include status filter in header if applied (e.g., "Last 30 Days (Active Only)")
 
-**Step 3: Testing**
-
-- Test filter shows members added in last 6 months
-- Test filter shows reactivated members (since reactivation sets date_joined to today)
-- Test pagination works with filter
-- Test filter can be cleared
-- Test filter works with other search parameters (if applicable)
+**Template Structure:**
+- Add new section after Status Filter buttons
+- Update member list item template to include Date Joined
+- Update all filter button URLs to preserve `recent_filter` parameter
 
 #### Dependencies
 
 - ✅ Change #004 (Reactivate Member Feature) - Completed (reactivation sets date_joined)
 - ✅ Search functionality exists - Completed
-- ✅ Pagination exists - Completed
+- ✅ Member model has `date_joined` field - Completed
 
 #### Testing Requirements
 
 1. **Manual Testing:**
-   - Click "Recently Added Members" filter
-   - Verify only members with date_joined in last 6 months are shown
-   - Verify reactivated members appear (since date_joined is set to reactivation date)
+   - Click "Last 30 Days" filter and verify only members with date_joined in last 30 days are shown
+   - Click "Last 6 Months" filter and verify only members with date_joined in last 180 days are shown
+   - Click "Last Year" filter and verify only members with date_joined in last 365 days are shown
+   - Verify results are ordered by date_joined descending (most recent first)
+   - Verify Date Joined is displayed in results list
+   - Verify reactivated members appear (since reactivation sets date_joined to today)
    - Verify newly created members appear
-   - Verify pagination works
+   - Verify filter works with status filter (e.g., "Last 30 Days + Active only")
+   - Verify filter is mutually exclusive with text search and alphabet browse
    - Verify filter can be cleared
-   - Test with members older than 6 months (should not appear)
+   - Test with members older than selected time period (should not appear)
+   - Test with members exactly at the cutoff date (should appear)
 
 2. **Edge Cases:**
-   - Members exactly 6 months old (should appear)
-   - Members just over 6 months old (should not appear)
-   - Members with no date_joined (should not appear)
+   - Members exactly at cutoff date (should appear)
+   - Members just before cutoff date (should not appear)
+   - Members with no date_joined (should not appear or handle gracefully)
    - Empty result set
-   - Large result sets requiring pagination
+   - Large result sets (show all results, no limit)
 
 3. **Automated Testing:**
-   - Add test cases for recent members filter
-   - Test date filtering logic
-   - Test pagination with filter
+   - Add test cases for recent members filter (30, 180, 365 days)
+   - Test date filtering logic for each time period
+   - Test ordering (most recent first)
+   - Test integration with status filter
+   - Test mutual exclusivity with query and browse_range
    - Test filter clearing
 
 #### Benefits
 
 - ✅ Quick access to recently added/reactivated members
-- ✅ Helps track new member growth
+- ✅ Three convenient time period options (30 days, 6 months, 1 year)
+- ✅ Helps track new member growth over different time periods
 - ✅ Useful for follow-up on new members
 - ✅ Helps identify recent reactivations
 - ✅ Improves member management workflow
+- ✅ Date Joined visible in results for quick reference
 
 #### Notes
 
-- **Date Range**: 6 months is a reasonable default, but could be made configurable in the future
+- **Quick Filters Only**: No date range selector - just three preset buttons for simplicity
+- **Show All Results**: No limit on number of results displayed (show all matching members)
+- **Ordering**: Always ordered by `-date_joined` (most recent first) when recent filter is active
 - **Reactivated Members**: Since Change #004 sets `date_joined` to today on reactivation, reactivated members will appear in this list
 - **Performance**: Ensure query is optimized with proper indexing on `date_joined` field
-- **Future Enhancement**: Could add additional filters (last 30 days, last year, etc.)
-- **Future Enhancement**: Could add sorting options (by name, by date joined, etc.)
+- **Mutual Exclusivity**: Recent filter is mutually exclusive with text search (`q`) and alphabet browse (`browse`), but works with status filter
+- **Future Enhancement**: Could add date range selector for custom date ranges
+- **Future Enhancement**: Could add pagination if result sets become very large
 
 ---
 
