@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-dead_df = pd.read_excel("../data/2025_09_02/excel_files/2025_09_02_Dead.xlsx")
+dead_df = pd.read_excel("../data/2025_12_06/original/2025_12_06_Dead.xlsx")
 
 dead_df.info()
 
@@ -256,4 +256,4 @@ dead_df.home_zip.value_counts(dropna=False)
 
 # save the cleaned data
 ################################################################
-dead_df.to_csv("../data/2025_09_02/cleaned/current_dead.csv", index=False)
+dead_df.to_csv("../data/2025_12_06/cleaned/current_dead.csv", index=False)
