@@ -147,7 +147,6 @@ class MemberAdmin(admin.ModelAdmin):
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
     list_display = [
-        "id",
         "member",
         "amount",
         "date",
@@ -156,7 +155,6 @@ class PaymentAdmin(admin.ModelAdmin):
     ]
     list_filter = ["payment_method", "date"]
     search_fields = [
-        "id",
         "member__first_name",
         "member__last_name",
         "member__member_id",
@@ -164,7 +162,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "receipt_number",
     ]
     ordering = ["-date"]
-    readonly_fields = ["id", "created_at", "updated_at"]
+    readonly_fields = ["created_at", "updated_at"]
     date_hierarchy = "date"
 
     fieldsets = (
@@ -172,7 +170,6 @@ class PaymentAdmin(admin.ModelAdmin):
             "Payment Information",
             {
                 "fields": (
-                    "id",
                     "member",
                     "amount",
                     "date",

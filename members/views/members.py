@@ -127,6 +127,27 @@ def add_member_view(request):
             }
             request.session["member_data"] = member_data
 
+        # If reactivating, add preferred_member_id to suggestions if available
+        if reactivate_uuid:
+            # Load reactivate_member if not already loaded
+            if reactivate_member is None:
+                reactivate_member = get_object_or_404(
+                    Member, member_uuid=reactivate_uuid
+                )
+
+            # Check if preferred_member_id exists and is available
+            preferred_id = reactivate_member.preferred_member_id
+            if (
+                preferred_id
+                and 1 <= preferred_id <= 999  # Validate range
+                and Member.objects.is_member_id_available(preferred_id)
+                and preferred_id not in suggested_ids
+            ):
+                # Add preferred ID at the beginning of suggestions
+                suggested_ids.insert(0, preferred_id)
+                # Limit to 5 suggestions total
+                suggested_ids = suggested_ids[:5]
+
         context = {
             "step": "form",
             "member_types": member_types,
@@ -179,13 +200,13 @@ def add_member_view(request):
                     raise ValueError(
                         f"Member ID must be a number. You entered: '{member_id}'"
                     )
-                
+
                 # Validate range (1-999)
                 if member_id_int < 1 or member_id_int > 999:
                     raise ValueError(
                         f"Member ID must be between 1 and 999. You entered: {member_id_int}"
                     )
-                
+
                 # Validate member ID is available
                 if Member.objects.filter(
                     status="active", member_id=member_id_int
@@ -257,7 +278,7 @@ def add_member_view(request):
                 # Render form again with preserved data instead of redirecting
                 member_types = MemberType.objects.all()
                 next_member_id, suggested_ids = MemberService.get_suggested_ids(count=5)
-                
+
                 # Preserve form data in context
                 context = {
                     "step": "form",
