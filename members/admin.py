@@ -2,6 +2,9 @@ from django.contrib import admin
 from django import forms
 from django.db import models
 from django.urls import path
+from django.contrib.auth.views import LoginView
+from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.utils.http import url_has_allowed_host_and_scheme
 from .models import Member, MemberType, PaymentMethod, Payment
 from .admin_views import deactivate_expired_members_view
 
@@ -188,6 +191,49 @@ class PaymentAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+# Override admin login to redirect to main app instead of /admin/
+
+
+class CustomAdminLoginView(LoginView):
+    """Custom admin login view that redirects to main app after login"""
+
+    template_name = "admin/login.html"
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        # Check if there's a 'next' parameter (user requested specific redirect)
+        redirect_to = self.request.GET.get(REDIRECT_FIELD_NAME, "")
+        if redirect_to:
+            # Validate the redirect URL is safe
+            if url_has_allowed_host_and_scheme(
+                url=redirect_to,
+                allowed_hosts={self.request.get_host()},
+                require_https=self.request.is_secure(),
+            ):
+                return redirect_to
+
+        # Default: redirect to main app instead of /admin/
+        return "/"
+
+
+# Store original login method
+original_admin_login = admin.site.login
+
+
+# Override admin site's login method
+def custom_admin_login(request, extra_context=None):
+    """Custom admin login that uses our custom login view with admin template"""
+    if extra_context is None:
+        extra_context = {}
+    # Use admin site's default extra_context
+    extra_context.update(admin.site.each_context(request))
+    return CustomAdminLoginView.as_view(extra_context=extra_context)(request)
+
+
+# Replace admin site's login method
+admin.site.login = custom_admin_login
 
 
 # Register custom admin URL for deactivating expired members
