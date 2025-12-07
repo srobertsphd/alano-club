@@ -15,3 +15,7 @@ wheels/
 # data files
 data/
 
+/data/2025_12_06/
+
+# logs
+logs/
