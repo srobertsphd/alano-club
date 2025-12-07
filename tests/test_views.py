@@ -450,6 +450,95 @@ class TestMemberReactivation:
         assert response.status_code == 302
         assert "reactivate_member_uuid" not in client.session
 
+    def test_reactivate_member_view_clears_stale_session_data(
+        self, client, inactive_member, member_type
+    ):
+        """Test that reactivate_member_view clears stale session data from previous attempts"""
+        from datetime import date
+
+        # Create a second inactive member
+        inactive_member_2 = Member.objects.create(
+            first_name="Second",
+            last_name="Inactive",
+            email="second@example.com",
+            member_type=member_type,
+            member_id=253,
+            status="inactive",
+            expiration_date=date(2024, 1, 31),
+            milestone_date=date(2019, 1, 1),
+            date_joined=date(2021, 1, 1),
+            home_address="999 Stale St",
+            home_city="Stale City",
+            home_state="TX",
+            home_zip="99999",
+            home_phone="555-9999",
+        )
+
+        # Simulate stale session data from a previous reactivation attempt
+        session = client.session
+        session["reactivate_member_uuid"] = str(inactive_member.member_uuid)
+        session["member_data"] = {
+            "first_name": inactive_member.first_name,
+            "last_name": inactive_member.last_name,
+            "email": inactive_member.email,
+            "member_type_id": str(inactive_member.member_type.pk),
+            "member_id": inactive_member.member_id,
+            "milestone_date": inactive_member.milestone_date.isoformat(),
+            "date_joined": date.today().isoformat(),
+            "home_address": inactive_member.home_address,
+            "home_city": inactive_member.home_city,
+            "home_state": inactive_member.home_state,
+            "home_zip": inactive_member.home_zip,
+            "home_phone": inactive_member.home_phone,
+        }
+        session["payment_data"] = {
+            "amount": "30.00",
+            "payment_date": date.today().isoformat(),
+            "payment_method_id": "1",
+            "receipt_number": "STALE-001",
+        }
+        session.save()
+
+        # Verify stale data exists
+        assert "member_data" in client.session
+        assert "payment_data" in client.session
+        assert client.session["member_data"]["first_name"] == "Inactive"
+
+        # Start reactivation for the second member
+        response = client.get(f"/reactivate/{inactive_member_2.member_uuid}/")
+        assert response.status_code == 302
+        assert response.url == "/add/"
+
+        # Verify stale session data is cleared
+        assert "member_data" not in client.session
+        assert "payment_data" not in client.session
+
+        # Verify new reactivation UUID is set correctly
+        assert "reactivate_member_uuid" in client.session
+        assert client.session["reactivate_member_uuid"] == str(
+            inactive_member_2.member_uuid
+        )
+
+        # Verify form loads with correct member's data (not stale data)
+        response = client.get("/add/?step=form")
+        assert response.status_code == 200
+        assert "reactivate_member" in response.context
+        assert (
+            response.context["reactivate_member"].member_uuid
+            == inactive_member_2.member_uuid
+        )
+
+        member_data = response.context["member_data"]
+        # Should have second member's data, not first member's stale data
+        assert member_data["first_name"] == "Second"
+        assert member_data["last_name"] == "Inactive"
+        assert member_data["email"] == "second@example.com"
+        assert member_data["home_address"] == "999 Stale St"
+        assert member_data["home_city"] == "Stale City"
+        assert member_data["home_state"] == "TX"
+        assert member_data["home_zip"] == "99999"
+        assert member_data["home_phone"] == "555-9999"
+
     def test_reactivation_form_pre_populates_member_data(
         self, client, inactive_member, member_type
     ):

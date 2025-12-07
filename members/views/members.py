@@ -19,6 +19,12 @@ def reactivate_member_view(request, member_uuid):
         messages.error(request, "Only inactive members can be reactivated.")
         return redirect("members:member_detail", member_uuid=member_uuid)
 
+    # Clear any stale session data from previous reactivation attempts
+    if "member_data" in request.session:
+        del request.session["member_data"]
+    if "payment_data" in request.session:
+        del request.session["payment_data"]
+
     request.session["reactivate_member_uuid"] = str(member_uuid)
     return redirect("members:add_member")
 
