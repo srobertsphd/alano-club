@@ -53,7 +53,7 @@ class TestDeactivateExpiredMembersView:
         """Test that GET request displays eligible expired members"""
         # Create expired member without payment
         expired_date = date.today() - timedelta(days=95)
-        member = Member.objects.create(
+        Member.objects.create(
             first_name="John",
             last_name="Doe",
             member_type=member_type,
@@ -97,7 +97,7 @@ class TestDeactivateExpiredMembersView:
         """Test that members expired less than 90 days are excluded"""
         # Create member expired only 50 days ago
         expired_date = date.today() - timedelta(days=50)
-        member = Member.objects.create(
+        Member.objects.create(
             first_name="Recent",
             last_name="Expired",
             member_type=member_type,
@@ -114,7 +114,7 @@ class TestDeactivateExpiredMembersView:
         """Test that inactive members are excluded"""
         # Create expired inactive member
         expired_date = date.today() - timedelta(days=95)
-        member = Member.objects.create(
+        Member.objects.create(
             first_name="Inactive",
             last_name="Member",
             member_type=member_type,
@@ -255,7 +255,7 @@ class TestDeactivateExpiredMembersView:
             is_staff=False,
         )
         client = Client()
-        client.login(username="regular", password="testpass")
+        client.force_login(user)
 
         response = client.get("/admin/deactivate-expired-members/")
         # Should redirect to login or return 403
