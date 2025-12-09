@@ -194,8 +194,6 @@ def add_member_view(request):
                     raise ValueError("Member type is required")
                 if not member_id:
                     raise ValueError("Member ID is required")
-                if not milestone_date:
-                    raise ValueError("Milestone date is required")
                 if not date_joined:
                     raise ValueError("Date joined is required")
 
@@ -223,14 +221,18 @@ def add_member_view(request):
                 member_type = get_object_or_404(MemberType, pk=member_type_id)
 
                 # Parse and validate dates
-                milestone_date_obj = datetime.strptime(
-                    milestone_date, "%Y-%m-%d"
-                ).date()
+                milestone_date_obj = None
+                if milestone_date:
+                    milestone_date_obj = datetime.strptime(
+                        milestone_date, "%Y-%m-%d"
+                    ).date()
+                    # Validate milestone date is not in the future
+                    if milestone_date_obj > date.today():
+                        raise ValueError("Milestone date cannot be in the future")
+
                 date_joined_obj = datetime.strptime(date_joined, "%Y-%m-%d").date()
 
-                # Validate dates are not in the future
-                if milestone_date_obj > date.today():
-                    raise ValueError("Milestone date cannot be in the future")
+                # Validate date joined is not in the future
                 if date_joined_obj > date.today():
                     raise ValueError("Date joined cannot be in the future")
 
@@ -257,7 +259,9 @@ def add_member_view(request):
                     "email": email,
                     "member_type_id": member_type_id,
                     "member_id": member_id_int,
-                    "milestone_date": milestone_date_obj.isoformat(),
+                    "milestone_date": milestone_date_obj.isoformat()
+                    if milestone_date_obj
+                    else "",
                     "date_joined": date_joined_obj.isoformat(),
                     "home_address": home_address,
                     "home_city": home_city,
@@ -502,9 +506,11 @@ def add_member_view(request):
                     member.last_name = member_data["last_name"]
                     member.email = member_data["email"]
                     member.member_type = member_type
-                    member.milestone_date = datetime.fromisoformat(
-                        member_data["milestone_date"]
-                    ).date()
+                    member.milestone_date = (
+                        datetime.fromisoformat(member_data["milestone_date"]).date()
+                        if member_data.get("milestone_date")
+                        else None
+                    )
                     member.date_joined = date.today()  # Set to today for reactivation
                     member.home_address = member_data["home_address"]
                     member.home_city = member_data["home_city"]

@@ -194,7 +194,7 @@ class MemberService:
                 - member_type_id: MemberType ID
                 - first_name, last_name, email
                 - member_id: Member ID (integer)
-                - milestone_date: ISO format string
+                - milestone_date: ISO format string (optional)
                 - date_joined: ISO format string
                 - home_address, home_city, home_state, home_zip, home_phone
                 - initial_expiration: ISO format string
@@ -204,12 +204,17 @@ class MemberService:
         """
         member_type = MemberType.objects.get(pk=member_data["member_type_id"])
 
+        # Parse milestone_date if provided, otherwise None
+        milestone_date = None
+        if member_data.get("milestone_date"):
+            milestone_date = datetime.fromisoformat(member_data["milestone_date"]).date()
+
         member = Member.objects.create_new_member(
             first_name=member_data["first_name"],
             last_name=member_data["last_name"],
             email=member_data["email"],
             member_type=member_type,
-            milestone_date=datetime.fromisoformat(member_data["milestone_date"]).date(),
+            milestone_date=milestone_date,
             date_joined=datetime.fromisoformat(member_data["date_joined"]).date(),
             home_address=member_data["home_address"],
             home_city=member_data["home_city"],
