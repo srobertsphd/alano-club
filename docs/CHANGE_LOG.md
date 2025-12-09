@@ -2156,6 +2156,127 @@ Currently, the system only has an administrative login page (`/admin/login/`) ac
 
 ---
 
+### Change #009: Preferred Member ID Restoration and User Feedback During Reactivation
+
+**Status:** Planned  
+**Priority:** Medium  
+**Estimated Effort:** 30-45 minutes  
+**Created:** December 2025
+
+#### Description
+
+During member reactivation, the system should restore the member's previous Member ID (stored in `preferred_member_id`) if it's available. Currently, the code incorrectly checks `member_id` (which is `None` for inactive members) instead of `preferred_member_id`, causing the system to always assign the next available ID instead of restoring the preferred one when possible.
+
+Additionally, users should receive clear feedback about whether their previous Member ID was restored or if a new ID was assigned, improving transparency and user experience.
+
+#### Current Implementation
+
+**Location:** `members/views/members.py` - `add_member_view` function (lines 103-115)
+
+**Current Behavior:**
+- When reactivating a member, the code checks `reactivate_member.member_id` (which is `None` for inactive members)
+- Always falls back to `next_member_id` instead of checking `preferred_member_id`
+- The `preferred_member_id` is added to dropdown suggestions (lines 136-155) but never used to populate the field
+- No user feedback about ID restoration status
+
+**Current Code Issue:**
+```python
+# Line 104: WRONG - checks member_id which is None for inactive members
+old_member_id = reactivate_member.member_id
+if (old_member_id and not Member.objects.filter(...).exists()):
+    member_id_to_use = old_member_id
+else:
+    member_id_to_use = next_member_id  # Always executes this
+```
+
+**Why This Happens:**
+- When a member is deactivated (`members/models.py` line 232-239), `member_id` is set to `None` and `preferred_member_id` stores the old ID
+- The reactivation logic incorrectly checks the wrong field
+
+#### Proposed Implementation
+
+**Fix 1: Correct Member ID Selection Logic**
+- Change line 104 to check `reactivate_member.preferred_member_id` instead of `reactivate_member.member_id`
+- Add validation for ID range (1-999)
+- Use preferred ID if available, otherwise fall back to next available ID
+
+**Fix 2: Conditional User Feedback Messages**
+- Determine message state based on whether preferred ID was restored
+- Display appropriate message under Member ID field:
+  - **Success message** (green): "Your previous Member ID (#251) is available and has been restored."
+  - **Warning message** (yellow): "Your previous Member ID (#251) is no longer available. A new ID (#253) has been selected."
+  - **No message**: When no preferred ID existed (new member or member never had an ID)
+
+**Location:** `members/templates/members/add_member.html` (around line 80)
+
+#### Implementation Steps
+
+**Step 1: Fix Member ID Selection Logic (`members/views/members.py` lines 103-115)**
+1. Replace `old_member_id = reactivate_member.member_id` with `preferred_id = reactivate_member.preferred_member_id`
+2. Update availability check to use `preferred_id` with range validation
+3. Set `member_id_to_use` based on preferred ID availability
+4. Fallback to `next_member_id` if preferred ID unavailable or doesn't exist
+
+**Step 2: Add Message Determination Logic (`members/views/members.py` after line 115)**
+1. Determine message type:
+   - `"restored"` - preferred ID exists and was used
+   - `"unavailable"` - preferred ID exists but was taken/unavailable
+   - `"none"` - no preferred ID existed
+   - `None` - not a reactivation
+2. Build message text with appropriate ID numbers
+3. Add `id_message_type` and `id_message` to context (around line 157)
+
+**Step 3: Update Template (`members/templates/members/add_member.html` around line 80)**
+1. Replace current "Next 5 available" help text with conditional logic
+2. Display success message (green) when preferred ID restored
+3. Display warning message (yellow) when preferred ID unavailable
+4. Show normal "Next 5 available" text for new members (not reactivation)
+5. Use Bootstrap icons (`bi-check-circle`, `bi-exclamation-triangle`)
+
+#### Dependencies
+
+- ✅ Member model with `preferred_member_id` field - Completed
+- ✅ Deactivation logic that saves to `preferred_member_id` - Completed
+- ✅ Reactivation view flow - Completed
+- ⏳ Template context variables - To be added
+
+#### Testing Requirements
+
+1. **Manual Testing:**
+   - Reactivate member with preferred ID available → verify ID restored and success message shown
+   - Reactivate member with preferred ID taken → verify new ID assigned and warning message shown
+   - Reactivate member with no preferred ID → verify new ID assigned and no special message
+   - New member creation (not reactivation) → verify normal "Next 5 available" text shown
+   - Preferred ID out of range → verify treated as unavailable
+
+2. **Edge Cases:**
+   - Preferred ID is `None` → no message shown
+   - Preferred ID exists but is taken by another active member → warning message shown
+   - Preferred ID already in suggested_ids dropdown → still show message (it's in the field)
+   - Member has no preferred_member_id → no message shown
+
+3. **Automated Testing:**
+   - Update `test_reactivation_preserves_old_member_id_if_available` to verify preferred ID logic
+   - Add test for message display logic
+   - Verify test fixtures match real deactivation behavior (may need updates)
+
+#### Benefits
+
+- ✅ Restores member's preferred ID when available (improves member identity preservation)
+- ✅ Provides clear user feedback about ID restoration status
+- ✅ Improves transparency and user trust
+- ✅ Better user experience with informative messages
+- ✅ Fixes bug that prevented preferred ID restoration
+
+#### Notes
+
+- **Current Bug**: The code checks `member_id` (None) instead of `preferred_member_id` (where old ID is stored)
+- **Test Fixture Issue**: Test fixtures may create inactive members with `member_id` still set, which doesn't match real deactivation behavior - may need updates
+- **Consistency**: The `Member.reactivate()` method (models.py line 241) correctly uses `preferred_member_id` - view logic should match this pattern
+- **Code Consolidation**: Dropdown logic (lines 136-155) already checks `preferred_member_id` - consider consolidating to avoid duplication, but keep separate since dropdown adds to suggestions even if used in field
+
+---
+
 ## Template for New Changes
 
 ### Change #XXX: [Title]

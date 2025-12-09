@@ -100,18 +100,17 @@ def add_member_view(request):
                 del request.session["reactivate_member_uuid"]
                 return redirect("members:member_detail", member_uuid=reactivate_uuid)
 
-            # Check if old member ID is available
-            old_member_id = reactivate_member.member_id
+            # Check if preferred_member_id is available
+            preferred_id = reactivate_member.preferred_member_id
             if (
-                old_member_id
-                and not Member.objects.filter(
-                    status="active", member_id=old_member_id
-                ).exists()
+                preferred_id
+                and 1 <= preferred_id <= 999  # Validate range
+                and Member.objects.is_member_id_available(preferred_id)
             ):
-                # Old ID is available, use it
-                member_id_to_use = old_member_id
+                # Preferred ID is available, use it
+                member_id_to_use = preferred_id
             else:
-                # Old ID taken or doesn't exist, use next available
+                # Preferred ID taken, out of range, or doesn't exist, use next available
                 member_id_to_use = next_member_id
 
             # Pre-populate member_data from inactive member
@@ -154,6 +153,37 @@ def add_member_view(request):
                 # Limit to 5 suggestions total
                 suggested_ids = suggested_ids[:5]
 
+        # Determine message type and text for ID restoration feedback
+        id_message_type = None
+        id_message = None
+        if reactivate_uuid:
+            # Load reactivate_member if not already loaded
+            if reactivate_member is None:
+                reactivate_member = get_object_or_404(
+                    Member, member_uuid=reactivate_uuid
+                )
+
+            # Get the member ID that will be displayed in the field
+            current_member_id = None
+            if member_data and "member_id" in member_data:
+                current_member_id = member_data["member_id"]
+            else:
+                # Use next_member_id as fallback (this is what would be shown)
+                current_member_id = next_member_id
+
+            # Determine message based on preferred ID status
+            preferred_id = reactivate_member.preferred_member_id
+            if preferred_id and 1 <= preferred_id <= 999:
+                if current_member_id == preferred_id:
+                    # Preferred ID was restored
+                    id_message_type = "restored"
+                    id_message = f"Your previous Member ID (#{preferred_id}) is available and will be restored."
+                else:
+                    # Preferred ID exists but wasn't used (taken or unavailable)
+                    id_message_type = "unavailable"
+                    id_message = f"Your previous Member ID (#{preferred_id}) is no longer available. A new ID (#{current_member_id}) has been selected."
+            # If no preferred_id, no message (id_message_type stays None)
+
         context = {
             "step": "form",
             "member_types": member_types,
@@ -164,6 +194,8 @@ def add_member_view(request):
             "suggested_ids": suggested_ids,
             "member_data": member_data,
             "reactivate_member": reactivate_member if reactivate_uuid else None,
+            "id_message_type": id_message_type,
+            "id_message": id_message,
         }
         return render(request, "members/add_member.html", context)
 
