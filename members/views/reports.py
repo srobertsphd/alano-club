@@ -91,3 +91,13 @@ def recent_payments_report_view(request):
         "start_date": one_year_ago,
     }
     return render(request, "members/reports/recent_payments.html", context)
+
+
+@login_required
+def newsletter_export_view(request):
+    """Generate Excel export of active members for newsletter distribution"""
+    active_members = Member.objects.filter(status="active").order_by("member_id")
+
+    from ..reports.excel import generate_newsletter_excel
+
+    return generate_newsletter_excel(active_members)

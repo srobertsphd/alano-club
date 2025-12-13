@@ -27,6 +27,11 @@ urlpatterns = [
         views.recent_payments_report_view,
         name="recent_payments_report",
     ),
+    path(
+        "reports/newsletter/",
+        views.newsletter_export_view,
+        name="newsletter_export",
+    ),
     # Payment functionality
     path("payments/add/", views.add_payment_view, name="add_payment"),
 ]

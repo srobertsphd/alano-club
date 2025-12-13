@@ -48,6 +48,23 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Newsletter Export Card -->
+                        <div class="col-md-6">
+                            <div class="card h-100 border-info">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-envelope text-info" style="font-size: 3rem;"></i>
+                                    <h3 class="card-title mt-3">Newsletter Export</h3>
+                                    <p class="card-text text-muted">
+                                        Generate Excel file with active member data formatted for newsletter distribution.
+                                    </p>
+                                    <a href="{% url 'members:newsletter_export' %}" class="btn btn-info">
+                                        <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>
+                                        Download Excel
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
