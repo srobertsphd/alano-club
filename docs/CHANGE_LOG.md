@@ -62,6 +62,249 @@ Added a new report on the Reports landing page that generates an Excel file cont
 
 ---
 
+### Change #015: Expires Two Months Report
+
+**Status:** Planned  
+**Priority:** Medium  
+**Estimated Effort:** 3-4 hours  
+**Created:** December 2025
+
+#### Description
+
+Add a new report on the Reports landing page that generates an Excel file containing active members whose expiration dates are 60+ days ago (expired 2+ months ago). This report helps identify members who have been expired for at least 2 months but are still marked as active, allowing staff to review and potentially deactivate them.
+
+#### Current Implementation
+
+**Location:** `members/templates/members/reports/landing.html`, `members/views/reports.py`, `members/reports/excel.py`
+
+**Current Behavior:**
+- Reports landing page displays report cards including New Member Export and Milestone Export
+- No report exists for identifying members expired 2+ months ago
+- No automated way to identify active members with expired memberships
+
+**Current Limitations:**
+- Cannot easily identify active members who expired 2+ months ago
+- Manual review required to find members who should be deactivated
+
+#### Proposed Implementation
+
+**New Feature: Expires Two Months Report**
+
+A new report card on the Reports landing page that:
+1. **Simple Export Page:**
+   - No date selection needed (uses current date automatically)
+   - Single "Generate Excel Export" button
+   - Simple page layout with report description
+
+2. **Member Filtering Logic:**
+   - Only includes active members (`status='active'`)
+   - Filters by expiration_date being 60+ days ago
+   - Filter: `expiration_date <= today - 60 days`
+   - Orders by `member_id` ASC
+
+3. **Excel Export Generation:**
+   - Generates Excel file with 7 columns
+   - Single sheet (no email separation needed)
+
+**Excel File Structure:**
+
+**Column Headers (in order, 7 columns total):**
+1. **MemberID** - `member_id` field
+2. **FirstName** - `first_name` field
+3. **LastName** - `last_name` field
+4. **EmailName** - `email` field
+5. **DateJoined** - `date_joined` field (formatted as MM/DD/YYYY)
+6. **MailName** - Format: `FirstName LastName<email@example.com>` (empty if no email)
+7. **Expires** - `expiration_date` field (formatted as MM/DD/YYYY)
+
+**Date Formatting:**
+- All dates formatted as MM/DD/YYYY with slashes (e.g., "12/25/2024")
+- Applies to: DateJoined (date_joined), Expires (expiration_date)
+- Empty/null dates: Leave cell completely blank (empty cell, no "N/A" or placeholder)
+
+**Special Column Calculations:**
+
+1. **MailName Column:**
+   - Format: `FirstName LastName<email@example.com>` if email exists
+   - Empty/blank if no email
+
+**Sheet Organization:**
+- **Single Sheet**: All filtered members (no row limit, no email separation)
+
+**Data Processing Rules:**
+- Query only active members (`status='active'`)
+- Filter by expiration_date <= (today - 60 days)
+- Order by `member_id` ASC (lowest to highest)
+- Include all matching members in single sheet
+
+#### Implementation Steps
+
+**Step 1: Create View Function**
+- **File:** `members/views/reports.py`
+- **Action:** Add new function `expires_two_months_export_view(request)`
+- **Changes:**
+  - GET request: Render simple export page (no date selection)
+  - POST request: Filter members and generate Excel export
+  - Filtering logic:
+    ```python
+    today = date.today()
+    sixty_days_ago = today - timedelta(days=60)
+    
+    members = Member.objects.filter(
+        status='active',
+        expiration_date__lte=sixty_days_ago  # Expired 60+ days ago
+    ).order_by('member_id')
+    ```
+  - Call `generate_expires_two_months_excel(members)` (Step 2)
+  - Use `@login_required` decorator (consistent with other reports)
+- **Lines added:** ~40-50 lines
+
+**Step 2: Create Excel Generation Function**
+- **File:** `members/reports/excel.py`
+- **Action:** Add new function `generate_expires_two_months_excel(members_queryset)`
+- **Changes:**
+  - Take queryset of active members filtered by expiration date
+  - Create Excel workbook using openpyxl
+  - Create single sheet: "Expires Two Months"
+  - Implement helper functions:
+    - `format_date(d)` → MM/DD/YYYY format
+    - `create_mail_name(member)` → `FirstName LastName<email>` or empty
+  - Set column headers: MemberID, FirstName, LastName, EmailName, DateJoined, MailName, Expires
+  - Make headers bold
+  - Write data rows for all members
+  - Return HttpResponse with Excel file
+  - Set Content-Disposition header: `attachment; filename="expires_two_months_YYYY_MM_DD.xlsx"`
+- **Lines added:** ~100-120 lines
+
+**Step 3: Create Template**
+- **File:** `members/templates/members/reports/expires_two_months_export.html` (new file)
+- **Action:** Create simple export page
+- **Changes:**
+  - Extend `members/base.html`
+  - Bootstrap card layout
+  - Title: "Expires Two Months Export"
+  - Description: "Export active members whose expiration dates are 60+ days ago (expired 2+ months ago)."
+  - Single form with POST method
+  - "Generate Excel Export" submit button
+  - Cancel button linking back to reports landing page
+  - Style consistently with other report pages
+- **Lines:** ~80-100 lines
+
+**Step 4: Add URL Route**
+- **File:** `members/urls.py`
+- **Action:** Add new route in reports section
+- **Changes:**
+  - Add after milestone export route:
+    ```python
+    path(
+        "reports/expires-two-months/",
+        views.expires_two_months_export_view,
+        name="expires_two_months",
+    ),
+    ```
+- **Lines added:** 4-5 lines
+
+**Step 5: Add Card to Reports Landing Page**
+- **File:** `members/templates/members/reports/landing.html`
+- **Action:** Add new card for "Expires Two Months"
+- **Changes:**
+  - Add new card in the `<div class="row g-4 mt-2">` section (after Milestone Export card)
+  - Match styling of existing cards (col-md-6, card, card-body, etc.)
+  - Use appropriate icon (e.g., `bi-calendar-x` or `bi-exclamation-triangle`)
+  - Use appropriate color (e.g., `border-warning` or `border-danger`)
+  - Link to: `{% url 'members:expires_two_months' %}`
+  - Description: "Export active members whose expiration dates are 60+ days ago (expired 2+ months ago)."
+  - Title: "Expires Two Months"
+- **Lines added:** ~15-20 lines
+
+**Step 6: Update Views Init File**
+- **File:** `members/views/__init__.py`
+- **Action:** Export new view function
+- **Changes:**
+  - Add `expires_two_months_export_view` to imports from `reports`
+  - Add to `__all__` list if present
+- **Lines:** 1-2 lines
+
+**Step 7: Create Test File**
+- **File:** `tests/test_expires_two_months_export.py` (new file)
+- **Action:** Create comprehensive test suite
+- **Changes:**
+  - Test view GET request (displays form)
+  - Test view POST request (generates Excel)
+  - Test filtering logic (only active members, expiration_date <= 60 days ago)
+  - Test Excel generation function
+  - Test column headers and order (7 columns)
+  - Test date formatting (MM/DD/YYYY)
+  - Test MailName formatting
+  - Test empty queryset handling
+  - Test members with/without email addresses
+- **Lines:** ~200-250 lines
+
+#### Dependencies
+
+- ✅ Reports landing page exists - Completed
+- ✅ Reports view structure exists - Completed
+- ✅ Member model with required fields (expiration_date, date_joined, status, email) - Completed
+- ✅ Excel generation utility exists (`members/reports/excel.py`) - Completed
+- ✅ Other export reports exist (as reference) - Completed
+- ✅ Python Excel library (openpyxl>=3.1.0) - Already installed
+
+#### Testing Requirements
+
+1. **Manual Testing:**
+   - Navigate to Reports landing page and verify new "Expires Two Months" card appears
+   - Click card and verify export page loads
+   - Click "Generate Excel Export" and verify Excel file downloads
+   - Open Excel file and verify:
+     - Column headers are correct and in correct order (7 columns)
+     - Only active members are included
+     - Only members with expiration_date <= 60 days ago are included
+     - Members are ordered by member_id (lowest to highest)
+     - Dates are formatted as MM/DD/YYYY
+     - MailName format is correct for members with emails
+     - MailName is blank for members without emails
+     - DateJoined is formatted correctly
+   - Test with no eligible members (empty Excel file or appropriate message)
+   - Test with members expired exactly 60 days ago (should be included)
+   - Test with members expired 59 days ago (should be excluded)
+   - Test with members expired 61+ days ago (should be included)
+
+2. **Edge Cases:**
+   - No members matching criteria (empty Excel file)
+   - Members with null expiration_date (should be excluded)
+   - Members with null date_joined (handle gracefully)
+   - Members with null email (MailName should be blank)
+   - Members with empty email string (MailName should be blank)
+
+3. **Automated Testing:**
+   - Add test cases for view (GET and POST)
+   - Test filtering logic (60+ days ago)
+   - Add test cases for Excel generation function
+   - Test column formatting (MailName, dates)
+   - Test file download response headers
+   - Test empty result sets
+   - Test edge cases (null fields, exact boundary dates)
+
+#### Benefits
+
+- ✅ Enables identification of active members expired 2+ months ago
+- ✅ Helps staff identify members who should be deactivated
+- ✅ Simple one-click export (no date selection needed)
+- ✅ Consistent with existing reports infrastructure
+- ✅ Staff-only access maintains security
+- ✅ Excel format enables data analysis and review
+
+#### Notes
+
+- **Filtering Logic**: Filters by expiration_date <= (today - 60 days)
+- **No Date Selection**: Report uses current date automatically (no user input needed)
+- **Active Members Only**: Only includes members with `status='active'`
+- **Ordering**: Results ordered by `member_id` ASC
+- **File Naming**: Include date in filename for easy identification: `expires_two_months_YYYY_MM_DD.xlsx`
+- **Reference Implementation**: Other export reports serve as reference for structure and patterns
+
+---
+
 ### Change #013: New Member Export Report with Date Range Selection
 
 **Status:** Planned  

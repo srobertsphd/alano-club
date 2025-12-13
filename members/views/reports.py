@@ -7,6 +7,7 @@ from django.db import transaction
 from datetime import date, timedelta
 
 from ..models import Member, Payment
+from ..reports.excel import generate_expires_two_months_excel
 
 
 @login_required
@@ -460,3 +461,29 @@ def deactivate_expired_members_report_view(request):
     }
 
     return render(request, "members/reports/deactivate_expired.html", context)
+
+
+@login_required
+def expires_two_months_export_view(request):
+    """
+    Generate Excel export of active members whose expiration dates are 60+ days ago.
+
+    GET: Display simple export page
+    POST: Generate Excel export
+    """
+    if request.method == "POST":
+        # Calculate date threshold (60 days ago)
+        today = date.today()
+        sixty_days_ago = today - timedelta(days=60)
+
+        # Filter active members expired 60+ days ago
+        members = Member.objects.filter(
+            status="active",
+            expiration_date__lte=sixty_days_ago,
+        ).order_by("member_id")
+
+        # Generate Excel export
+        return generate_expires_two_months_excel(members)
+
+    # GET request - display simple export page
+    return render(request, "members/reports/expires_two_months_export.html")

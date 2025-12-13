@@ -157,7 +157,7 @@ class TestNewMemberExportView:
         end_date = date.today() - timedelta(days=30)
 
         # Member within range
-        member_in_range = Member.objects.create(
+        Member.objects.create(
             first_name="In",
             last_name="Range",
             member_type=member_type,
@@ -447,7 +447,7 @@ class TestNewMemberExcelGeneration:
     def test_zip_extraction_first_5_digits(self, db, member_type):
         """Test that zip code is extracted as first 5 digits"""
         # Create member with zip code longer than 5 digits
-        member = Member.objects.create(
+        Member.objects.create(
             member_id=3,
             first_name="Test",
             last_name="Zip",

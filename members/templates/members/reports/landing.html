@@ -100,6 +100,23 @@
                             </div>
                         </div>
 
+                        <!-- Expires Two Months Card -->
+                        <div class="col-md-6">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-calendar-x text-warning" style="font-size: 3rem;"></i>
+                                    <h3 class="card-title mt-3">Expires Two Months</h3>
+                                    <p class="card-text text-muted">
+                                        Export active members whose expiration dates are 60+ days ago (expired 2+ months ago).
+                                    </p>
+                                    <a href="{% url 'members:expires_two_months' %}" class="btn btn-warning">
+                                        <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>
+                                        Export Expired
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Deactivate Expired Members Card -->
                         <div class="col-md-6">
                             <div class="card h-100 border-warning">

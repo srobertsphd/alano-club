@@ -1,0 +1,61 @@
+{% extends 'members/base.html' %}
+
+{% block title %}Expires Two Months Export - ALANO CLUB{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header text-center bg-warning text-dark">
+                    <h1 class="mb-0">
+                        <i class="bi bi-calendar-x me-2"></i>
+                        Expires Two Months Export
+                    </h1>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Export active members whose expiration dates are 60+ days ago (expired 2+ months ago). 
+                        This report helps identify members who have been expired for at least 2 months but are still marked as active.
+                    </p>
+
+                    <!-- Display Django messages/errors -->
+                    {% if messages %}
+                        {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>{{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="alert alert-info" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Note:</strong> This report will include all active members whose expiration dates are 60 or more days ago. 
+                            The report uses today's date automatically - no date selection is needed.
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12 d-flex justify-content-between">
+                                <a href="{% url 'members:reports_landing' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Cancel
+                                </a>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>
+                                    Generate Excel Export
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

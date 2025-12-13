@@ -456,3 +456,107 @@ def generate_milestone_excel(members_queryset):
     )
 
     return response
+
+
+def generate_expires_two_months_excel(members_queryset):
+    """Generate Excel export of active members whose expiration dates are 60+ days ago"""
+
+    # Split members into groups
+    members_with_email = []
+    members_without_email = []
+
+    for member in members_queryset:
+        if member.email and member.email.strip():
+            members_with_email.append(member)
+        else:
+            members_without_email.append(member)
+
+    # Create workbook
+    wb = Workbook()
+    wb.remove(wb.active)  # Remove default sheet
+
+    # Column headers (in order, 7 columns total)
+    headers = [
+        "MemberID",
+        "FirstName",
+        "LastName",
+        "EmailName",
+        "DateJoined",
+        "MailName",
+        "Expires",
+    ]
+
+    # Helper function to format date
+    def format_date(d):
+        if d:
+            return d.strftime("%m/%d/%Y")
+        return ""
+
+    # Helper function to create mail name
+    def create_mail_name(member):
+        if member.email and member.email.strip():
+            return f"{member.first_name} {member.last_name}<{member.email}>"
+        return ""
+
+    # Helper function to write member row
+    def write_member_row(ws, member):
+        ws.append(
+            [
+                member.member_id or "",  # MemberID
+                member.first_name,  # FirstName
+                member.last_name,  # LastName
+                member.email or "",  # EmailName
+                format_date(member.date_joined),  # DateJoined
+                create_mail_name(member),  # MailName
+                format_date(member.expiration_date),  # Expires
+            ]
+        )
+
+    # Create main sheet(s) for members with emails
+    if members_with_email:
+        main_sheet = wb.create_sheet(title="Expires Two Months")
+        # Write headers
+        main_sheet.append(headers)
+        # Make headers bold
+        for cell in main_sheet[1]:
+            cell.font = Font(bold=True)
+
+        # Write all members with emails
+        for member in members_with_email:
+            write_member_row(main_sheet, member)
+
+    # Create "no email" sheet if any members lack emails
+    if members_without_email:
+        no_email_sheet = wb.create_sheet(title="No Email")
+        # Write headers
+        no_email_sheet.append(headers)
+        # Make headers bold
+        for cell in no_email_sheet[1]:
+            cell.font = Font(bold=True)
+
+        # Write all members without emails
+        for member in members_without_email:
+            write_member_row(no_email_sheet, member)
+
+    # Ensure at least one sheet exists (for empty queryset case)
+    if len(wb.sheetnames) == 0:
+        empty_sheet = wb.create_sheet(title="Expires Two Months")
+        empty_sheet.append(headers)
+        for cell in empty_sheet[1]:
+            cell.font = Font(bold=True)
+
+    # Save to BytesIO buffer
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    # Create HTTP response
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="expires_two_months_{date.today().strftime("%Y_%m_%d")}.xlsx"'
+    )
+
+    return response
