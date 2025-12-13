@@ -385,8 +385,70 @@ def add_member_view(request):
                 }
                 return render(request, "members/add_member.html", context)
         else:
-            messages.error(request, "Invalid request.")
-            return redirect("members:add_member")
+            # Handle GET request (navigating back from payment step)
+            member_data = request.session.get("member_data")
+            if not member_data:
+                messages.error(request, "Member session expired. Please try again.")
+                return redirect("members:add_member")
+
+            try:
+                # Parse dates from session (stored as ISO strings)
+                milestone_date_obj = None
+                if member_data.get("milestone_date"):
+                    milestone_date_obj = datetime.strptime(
+                        member_data["milestone_date"], "%Y-%m-%d"
+                    ).date()
+
+                date_joined_obj = datetime.strptime(
+                    member_data["date_joined"], "%Y-%m-%d"
+                ).date()
+
+                # Get member type
+                member_type = get_object_or_404(
+                    MemberType, pk=member_data["member_type_id"]
+                )
+
+                # Check if reactivating
+                reactivate_uuid = request.session.get("reactivate_member_uuid")
+                reactivate_member = None
+                duplicate_members = []
+
+                if reactivate_uuid:
+                    reactivate_member = get_object_or_404(
+                        Member, member_uuid=reactivate_uuid
+                    )
+                else:
+                    # Check for duplicates
+                    duplicate_members = MemberService.check_duplicate_members(
+                        member_data["first_name"],
+                        member_data["last_name"],
+                        member_data.get("email", ""),
+                        member_data.get("home_phone", ""),
+                    )
+
+                # Reconstruct confirmation context
+                context = {
+                    "step": "confirm",
+                    "first_name": member_data["first_name"],
+                    "last_name": member_data["last_name"],
+                    "email": member_data.get("email", ""),
+                    "member_type": member_type,
+                    "member_id": member_data["member_id"],
+                    "milestone_date": milestone_date_obj,
+                    "date_joined": date_joined_obj,
+                    "home_address": member_data.get("home_address", ""),
+                    "home_city": member_data.get("home_city", ""),
+                    "home_state": member_data.get("home_state", ""),
+                    "home_zip": member_data.get("home_zip", ""),
+                    "home_phone": member_data.get("home_phone", ""),
+                    "duplicate_members": duplicate_members,
+                    "reactivate_member": reactivate_member,
+                }
+                return render(request, "members/add_member.html", context)
+
+            except (KeyError, ValueError, MemberType.DoesNotExist) as e:
+                messages.error(request, f"Invalid session data: {e}")
+                return redirect("members:add_member")
 
     elif step == "payment":
         # Step 3: Payment Form (for new member)
