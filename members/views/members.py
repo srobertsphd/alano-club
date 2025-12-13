@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
+from django.core.validators import EmailValidator, ValidationError
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from datetime import datetime, date
@@ -118,7 +119,7 @@ def add_member_view(request):
         reactivate_member = None
 
         # Get next available member ID and suggestions
-        next_member_id, suggested_ids = MemberService.get_suggested_ids(count=5)
+        next_member_id, suggested_ids = MemberService.get_suggested_ids(count=50)
 
         if reactivate_uuid and not member_data:
             # Pre-populate from inactive member
@@ -263,6 +264,14 @@ def add_member_view(request):
                         "Milestone date is required. Check 'Skip Milestone Date' if you don't want to provide one."
                     )
 
+                # Validate email format if provided (email is optional)
+                if email:
+                    validator = EmailValidator()
+                    try:
+                        validator(email)
+                    except ValidationError:
+                        raise ValueError("Please enter a valid email address")
+
                 # Validate member ID range and availability
                 try:
                     member_id_int = int(member_id)
@@ -360,7 +369,9 @@ def add_member_view(request):
                 messages.error(request, str(e))
                 # Render form again with preserved data instead of redirecting
                 member_types = MemberType.objects.all()
-                next_member_id, suggested_ids = MemberService.get_suggested_ids(count=5)
+                next_member_id, suggested_ids = MemberService.get_suggested_ids(
+                    count=50
+                )
 
                 # Preserve form data in context
                 context = {
