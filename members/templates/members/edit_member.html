@@ -25,6 +25,10 @@
                     {% endif %}
 
                     {% if mode == 'search' %}
+                        <div class="alert alert-danger mb-4">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Warning: You are in the Edit Member section.</strong> Please be careful when making changes to member records.
+                        </div>
                         <form method="get" class="mb-4">
                             <div class="input-group input-group-lg">
                                 <input type="text" name="q" class="form-control" placeholder="Enter member name or ID..." value="{{ query }}" autofocus>
@@ -63,6 +67,10 @@
                         {% endif %}
 
                     {% elif mode == 'edit' %}
+                        <div class="alert alert-danger mb-4">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Edit Mode Active</strong> — You are making changes to member records. Please verify all information before saving.
+                        </div>
                         <div class="alert alert-info mb-4">
                             <strong>{{ member.full_name }}</strong> (#{{ member.member_id }}) - <span class="badge bg-success">{{ member.get_status_display }}</span>
                         </div>
