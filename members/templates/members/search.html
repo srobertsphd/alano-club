@@ -47,8 +47,6 @@
                 <div class="card-body">
                     <!-- Search Form -->
                     <form method="get" class="mb-4">
-                        {% if status_filter and status_filter != 'all' %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-                        {% if recent_filter %}<input type="hidden" name="recent" value="{{ recent_filter }}">{% endif %}
                         <div class="input-group input-group-lg">
                             <input type="text" 
                                    name="q" 
@@ -70,11 +68,11 @@
                     <div class="text-center mb-4">
                         <small class="text-muted d-block mb-2">Filter by status:</small>
                         <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
-                            <a href="?{% if recent_filter %}recent={{ recent_filter }}&{% elif query %}q={{ query }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=all" 
+                            <a href="?{% if query %}q={{ query }}&{% elif recent_filter %}recent={{ recent_filter }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=all" 
                                class="btn btn-outline-primary btn-sm {% if status_filter == 'all' or not status_filter %}active{% endif %}">All</a>
-                            <a href="?{% if recent_filter %}recent={{ recent_filter }}&{% elif query %}q={{ query }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=active" 
+                            <a href="?{% if query %}q={{ query }}&{% elif recent_filter %}recent={{ recent_filter }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=active" 
                                class="btn btn-outline-primary btn-sm {% if status_filter == 'active' %}active{% endif %}">Active</a>
-                            <a href="?{% if recent_filter %}recent={{ recent_filter }}&{% elif query %}q={{ query }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=inactive" 
+                            <a href="?{% if query %}q={{ query }}&{% elif recent_filter %}recent={{ recent_filter }}&{% elif browse_range %}browse={{ browse_range }}&{% endif %}status=inactive" 
                                class="btn btn-outline-primary btn-sm {% if status_filter == 'inactive' %}active{% endif %}">Inactive</a>
                         </div>
                     </div>
@@ -83,14 +81,14 @@
                     <div class="text-center mb-4">
                         <small class="text-muted d-block mb-2">Or view recently added members:</small>
                         <div class="d-flex flex-wrap justify-content-center gap-2">
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=30" 
-                               class="btn btn-outline-primary btn-sm {% if recent_filter == '30' %}active{% endif %}">Last 30 Days</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=180" 
-                               class="btn btn-outline-primary btn-sm {% if recent_filter == '180' %}active{% endif %}">Last 6 Months</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=365" 
-                               class="btn btn-outline-primary btn-sm {% if recent_filter == '365' %}active{% endif %}">Last Year</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=30" 
+                               class="btn btn-outline-primary btn-sm {% if recent_filter == '30' and not query %}active{% endif %}">Last 30 Days</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=180" 
+                               class="btn btn-outline-primary btn-sm {% if recent_filter == '180' and not query %}active{% endif %}">Last 6 Months</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}recent=365" 
+                               class="btn btn-outline-primary btn-sm {% if recent_filter == '365' and not query %}active{% endif %}">Last Year</a>
                         </div>
-                        {% if recent_filter %}
+                        {% if recent_filter and not query %}
                             <div class="mt-2">
                                 <a href="{% url 'members:search' %}{% if status_filter and status_filter != 'all' %}?status={{ status_filter }}{% endif %}" class="btn btn-outline-secondary btn-sm">
                                     <i class="bi bi-x-circle me-1"></i>Clear Filter
@@ -103,18 +101,18 @@
                     <div class="text-center mb-4">
                         <small class="text-muted d-block mb-2">Or browse by last name:</small>
                         <div class="d-flex flex-wrap justify-content-center gap-2">
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=A-C" class="btn btn-outline-primary btn-sm {% if browse_range == 'A-C' %}active{% endif %}">A-C</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=D-F" class="btn btn-outline-primary btn-sm {% if browse_range == 'D-F' %}active{% endif %}">D-F</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=G-I" class="btn btn-outline-primary btn-sm {% if browse_range == 'G-I' %}active{% endif %}">G-I</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=J-L" class="btn btn-outline-primary btn-sm {% if browse_range == 'J-L' %}active{% endif %}">J-L</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=M-O" class="btn btn-outline-primary btn-sm {% if browse_range == 'M-O' %}active{% endif %}">M-O</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=P-R" class="btn btn-outline-primary btn-sm {% if browse_range == 'P-R' %}active{% endif %}">P-R</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=S-U" class="btn btn-outline-primary btn-sm {% if browse_range == 'S-U' %}active{% endif %}">S-U</a>
-                            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter %}recent={{ recent_filter }}&{% endif %}browse=V-Z" class="btn btn-outline-primary btn-sm {% if browse_range == 'V-Z' %}active{% endif %}">V-Z</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=A-C" class="btn btn-outline-primary btn-sm {% if browse_range == 'A-C' and not query %}active{% endif %}">A-C</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=D-F" class="btn btn-outline-primary btn-sm {% if browse_range == 'D-F' and not query %}active{% endif %}">D-F</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=G-I" class="btn btn-outline-primary btn-sm {% if browse_range == 'G-I' and not query %}active{% endif %}">G-I</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=J-L" class="btn btn-outline-primary btn-sm {% if browse_range == 'J-L' and not query %}active{% endif %}">J-L</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=M-O" class="btn btn-outline-primary btn-sm {% if browse_range == 'M-O' and not query %}active{% endif %}">M-O</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=P-R" class="btn btn-outline-primary btn-sm {% if browse_range == 'P-R' and not query %}active{% endif %}">P-R</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=S-U" class="btn btn-outline-primary btn-sm {% if browse_range == 'S-U' and not query %}active{% endif %}">S-U</a>
+                            <a href="?{% if query %}q={{ query }}&{% elif status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if recent_filter and not query %}recent={{ recent_filter }}&{% endif %}browse=V-Z" class="btn btn-outline-primary btn-sm {% if browse_range == 'V-Z' and not query %}active{% endif %}">V-Z</a>
                         </div>
-                        {% if browse_range %}
+                        {% if browse_range and not query %}
                             <div class="mt-2">
-                                <a href="{% url 'members:search' %}" class="btn btn-outline-secondary btn-sm">
+                                <a href="{% url 'members:search' %}{% if query %}?q={{ query }}{% endif %}" class="btn btn-outline-secondary btn-sm">
                                     <i class="bi bi-x-circle me-1"></i>Clear Filter
                                 </a>
                             </div>

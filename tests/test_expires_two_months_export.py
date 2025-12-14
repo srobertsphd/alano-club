@@ -94,7 +94,7 @@ class TestExpiresTwoMonthsExportView:
         today = date.today()
 
         # Member expired 70 days ago (should be included)
-        member_included = Member.objects.create(
+        Member.objects.create(
             first_name="Expired",
             last_name="Member",
             member_type=member_type,
