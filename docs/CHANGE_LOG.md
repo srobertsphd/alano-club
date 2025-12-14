@@ -20,6 +20,283 @@ Each change entry includes:
 
 ## Change Log
 
+### Change #020: Fix Receipt Numbers - Remove Decimal Suffix from Historic Data
+
+**Status:** In Progress  
+**Priority:** High  
+**Estimated Effort:** 1-2 hours  
+**Created:** December 2025
+
+#### Description
+
+Fix receipt numbers in the database that have `.0` decimal suffix from historic data imports. Historic payment records (pre-November 2025) were imported from Excel files where receipt numbers were converted to floats by pandas, resulting in values like `"596246.0"` being stored as text strings. New payment records entered via web forms correctly store receipt numbers without decimals (e.g., `"596246"`). This inconsistency causes receipt numbers to display with `.0` in reports and exports.
+
+**Root Cause:**
+- Excel files had receipt numbers as numeric values
+- Pandas converted numeric columns to `float64` during processing
+- CSV export wrote floats as strings with `.0` suffix (e.g., `"596246.0"`)
+- Import command stored these strings directly in database
+- Database column is correctly defined as `CharField` (text), but contains inconsistent string values
+
+**Impact:**
+- Reports show receipt numbers with `.0` for historic data
+- CSV exports include `.0` suffix for old records
+- Inconsistent display between old and new payment records
+- All receipt numbers are stored as text strings (no database type issue)
+
+#### Current Implementation
+
+**Database Schema:**
+- **Field:** `Payment.receipt_number`
+- **Type:** `CharField(max_length=50, blank=True)` (VARCHAR(50) in PostgreSQL)
+- **Migration:** `members/migrations/0001_initial.py` (line 74)
+
+**Data Storage:**
+- **Old data (pre-November 2025):** Stored as text strings like `"596246.0"`
+- **New data (post-November 2025):** Stored as text strings like `"596246"`
+- **Both are text strings** - the issue is the string content, not the data type
+
+**How Old Data Was Created:**
+1. Excel file (`2025_12_06_Member Payments.xlsx`) had receipt numbers as numbers
+2. Pandas script (`scripts/clean_member_payments.py`) read Excel and converted to float64
+3. CSV export wrote floats as strings: `"596246.0"`
+4. Import command (`members/management/commands/import_payments.py` line 102) stored strings as-is
+
+**How New Data Is Created:**
+1. Web form (`add_payment.html` line 263) uses `<input type="text">`
+2. User types receipt number: `596246`
+3. Django view (`views/payments.py` line 107) gets string: `"596246"`
+4. Stored directly in database as `"596246"` (no decimal)
+
+**Display Locations:**
+- `members/templates/members/member_detail.html` (line 283)
+- `members/templates/members/reports/recent_payments.html` (line 63)
+- `members/templates/members/reports/current_members.html` (line 79)
+- `members/templates/members/reports/current_members_pdf.html` (line 156)
+- `members/reports/csv.py` (line 33) - CSV export
+
+#### Implementation Steps
+
+**Phase 1: Pre-Flight Checks and Preparation**
+
+**Step 1.1: Verify Current Database Connection**
+- **Command:** `python manage.py shell -c "from django.conf import settings; print('Database:', settings.DATABASES['default']['NAME'])"`
+- **Purpose:** Confirm connected to DEV database, not production
+- **Expected:** Should show dev database name
+- **Action:** Report database name before proceeding
+
+**Step 1.2: Check Current Receipt Number Data**
+- **Command:** Python shell query to count affected records
+- **Purpose:** Understand scope of changes before making them
+- **Details:**
+  - Count total payments
+  - Count payments with `.0` suffix
+  - Show sample of affected records
+- **Action:** Report counts and samples before proceeding
+
+**Step 1.3: Verify Git Status**
+- **Command:** `git status` and `git branch`
+- **Purpose:** Ensure clean working state and correct branch
+- **Expected:** No uncommitted changes, on correct branch
+- **Action:** Report git status before proceeding
+
+**Phase 2: Create and Write Migration**
+
+**Step 2.1: Create Empty Migration File**
+- **Command:** `python manage.py makemigrations --empty members --name fix_receipt_numbers`
+- **Expected Output:** Creates `members/migrations/0002_fix_receipt_numbers.py`
+- **Action:** Create file and report success
+
+**Step 2.2: Write Migration Code**
+- **File:** `members/migrations/0002_fix_receipt_numbers.py`
+- **Action:** Write data migration with:
+  - Forward function to strip `.0` from receipt numbers ending in `.0`
+  - Reverse function to restore `.0` suffix (rollback capability)
+  - Safety checks (only updates records ending in `.0`)
+  - Uses Django ORM for safe, transaction-wrapped updates
+- **Details:**
+  - Update query: `Payment.objects.filter(receipt_number__endswith='.0')`
+  - Update logic: `receipt_number.rstrip('.0')` or `receipt_number[:-2]`
+  - Idempotent (safe to run multiple times)
+- **Action:** Write code and show for review before testing
+
+**Step 2.3: Review Migration File**
+- **Action:** Display complete migration file for review
+- **Purpose:** Verify logic is correct before testing
+- **Action:** Wait for approval before proceeding to Phase 3
+
+**Phase 3: Test on Dev Database**
+
+**Step 3.1: Show What Will Change (Dry Run)**
+- **Command:** Python shell query to preview changes
+- **Purpose:** Show exactly what will be updated before running migration
+- **Details:**
+  - List affected records
+  - Show before/after values
+  - Count total records to be updated
+- **Action:** Report preview, wait for approval
+
+**Step 3.2: Run Migration on Dev Database**
+- **Command:** `python manage.py migrate`
+- **Expected:** Migration applies successfully, shows update count
+- **Action:** Run migration, report results
+
+**Step 3.3: Verify the Changes**
+- **Command:** Python shell queries to verify
+- **Purpose:** Confirm `.0` suffixes are removed
+- **Details:**
+  - Check count of remaining `.0` records (should be 0)
+  - Show sample of updated receipt numbers
+  - Verify no data corruption
+- **Action:** Report verification results
+
+**Step 3.4: Test Reports Still Work**
+- **Action:** Manual testing in browser
+- **Details:**
+  - Open recent payments report
+  - Verify receipt numbers display correctly (no `.0`)
+  - Check CSV export works correctly
+  - Verify member detail pages show correct receipt numbers
+- **Action:** Report test results
+
+**Phase 4: Commit and Push to GitHub**
+
+**Step 4.1: Review Changes**
+- **Command:** `git status` and `git diff members/migrations/0002_fix_receipt_numbers.py`
+- **Purpose:** Review what will be committed
+- **Action:** Show diff, wait for approval
+
+**Step 4.2: Stage Migration File**
+- **Command:** `git add members/migrations/0002_fix_receipt_numbers.py`
+- **Action:** Stage file, report success
+
+**Step 4.3: Commit with Descriptive Message**
+- **Command:** `git commit -m "Fix receipt numbers: Remove .0 suffix from historic data..."`
+- **Message Details:**
+  - Clear description of what the migration does
+  - Notes that it only affects records ending in `.0`
+  - Mentions rollback capability
+- **Action:** Commit, report commit hash
+
+**Step 4.4: Push to GitHub**
+- **Command:** `git push origin <branch-name>`
+- **Purpose:** Push migration to trigger Render deployment
+- **Action:** Push, report success
+
+**Phase 5: Monitor Render Deployment**
+
+**Step 5.1: Watch Render Deployment Logs**
+- **Action:** Monitor Render dashboard during deployment
+- **Details:**
+  - Watch for `python manage.py migrate --noinput` in build logs
+  - Look for `Applying members.0002_fix_receipt_numbers...`
+  - Verify migration runs successfully
+- **Action:** Report deployment status
+
+**Step 5.2: Verify Production Database**
+- **Action:** Check production database after deployment
+- **Details:**
+  - Verify receipt numbers are fixed in production
+  - Check that no `.0` suffixes remain
+  - Confirm data integrity
+- **Action:** Report verification results
+
+**Step 5.3: Test Production Reports**
+- **Action:** Manual testing on production site
+- **Details:**
+  - Generate recent payments report
+  - Verify receipt numbers display correctly
+  - Test CSV export
+  - Verify member detail pages
+- **Action:** Report test results
+
+#### Dependencies
+
+- None - this is a standalone data cleanup migration
+- Requires access to both dev and production databases
+- Requires Render deployment access
+
+#### Testing Requirements
+
+1. **Pre-Migration Verification:**
+   - Verify connected to dev database
+   - Count affected records
+   - Preview changes before applying
+
+2. **Migration Testing:**
+   - Run migration on dev database
+   - Verify all `.0` suffixes removed
+   - Verify no data corruption
+   - Test reports and exports
+
+3. **Production Verification:**
+   - Monitor Render deployment
+   - Verify migration runs successfully
+   - Test production reports
+   - Verify CSV exports
+
+4. **Rollback Testing (if needed):**
+   - Test rollback function works
+   - Verify data can be restored
+
+#### Safety Features
+
+1. **Targeted Updates:** Only updates records where `receipt_number` ends with `.0`
+2. **Django ORM:** Uses safe, transaction-wrapped database operations
+3. **Rollback Function:** Includes reverse migration to restore `.0` if needed
+4. **Idempotent:** Safe to run multiple times (won't affect already-fixed records)
+5. **Tested on Dev First:** Proven on dev database before production
+6. **No Schema Changes:** Only updates data, doesn't change database structure
+
+#### Rollback Plan
+
+If migration causes issues:
+
+**Option 1: Use Django Migration Rollback**
+```bash
+python manage.py migrate members 0001_initial
+```
+This will reverse the data changes using the reverse function in the migration.
+
+**Option 2: Manual SQL Rollback (if needed)**
+```sql
+UPDATE members_payment 
+SET receipt_number = receipt_number || '.0' 
+WHERE receipt_number ~ '^[0-9]+$' 
+AND receipt_number NOT LIKE '%.0';
+```
+(Only if reverse migration doesn't work)
+
+#### Files to Create
+
+1. `members/migrations/0002_fix_receipt_numbers.py` - Data migration file
+
+#### Files to Modify
+
+None - this is a data-only migration, no code changes needed
+
+#### Files That Remain Unchanged
+
+All template and view files remain unchanged. The migration fixes the data at the source, so all displays will automatically show correct values.
+
+#### Benefits
+
+- **Consistent Data:** All receipt numbers stored without decimal suffix
+- **Clean Reports:** Reports and exports show consistent formatting
+- **Data Integrity:** Fixes data at the source, not just display
+- **Future-Proof:** Prevents similar issues in future imports
+- **One-Time Fix:** Cleans up historic data permanently
+
+#### Notes
+
+- **Database Type:** Receipt numbers are correctly stored as `CharField` (text). The issue is string content, not data type.
+- **Scope:** Only affects records imported before November 2025. New records are already correct.
+- **Risk Level:** Low - migration only updates string values, doesn't change schema or relationships.
+- **Performance:** Should be fast even with many records (simple string update query).
+- **Render Deployment:** Migration will run automatically during Render build process via `render.yaml` buildCommand.
+
+---
+
 ### Change #018: Fix Test Failures After Permission System Implementation
 
 **Status:** Planned  
