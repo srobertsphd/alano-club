@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Alano Club Project Context
 
 ## Project Overview
@@ -8,8 +12,8 @@ This is a Django web application for Alano Club member management, replacing the
 - **Database**: PostgreSQL via Supabase
 - **Package Manager**: UV (not pip)
 - **Virtual Environment**: `.venv` 
-- **Testing**: pytest (implementing)
-- **Deployment**: Render (planned)
+- **Testing**: pytest (implementing in test directory at root)
+- **Deployment**: Render (render.yaml)
 
 ## Critical Setup Requirements
 
@@ -32,7 +36,6 @@ uv add package-name
 ### Database Connection
 - **Database**: Supabase PostgreSQL
 - **Connection Variable**: `DATABASE_URL` (set in `.env` file)
-- **Configuration**: Uses `dj-database-url` for Django integration
 - **Required**: Ensure `DATABASE_URL` is properly configured before running Django commands
 
 ## Development Workflow Preferences
@@ -53,7 +56,7 @@ uv add package-name
 - `.env` - Environment variables (DATABASE_URL, SECRET_KEY)
 - `pyproject.toml` - uv project dependencies
 - `members/` - Main app for member management
-- `data/` - Excel/CSV data files for import
+- `data/` - Excel/CSV data files for import on job initialization
 
 ## Data Context
 The project involves importing existing member data from CSV files:
