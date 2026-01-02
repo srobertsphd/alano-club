@@ -133,6 +133,23 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Database Backup Card -->
+                        <div class="col-md-6">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-database text-danger" style="font-size: 3rem;"></i>
+                                    <h3 class="card-title mt-3">Database Backup</h3>
+                                    <p class="card-text text-muted">
+                                        Create and download database backup to your computer. Filename includes database type and timestamp.
+                                    </p>
+                                    <a href="{% url 'members:download_backup' %}" class="btn btn-danger">
+                                        <i class="bi bi-download me-2"></i>
+                                        Download Backup
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

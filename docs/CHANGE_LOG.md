@@ -185,6 +185,370 @@ context = {
 
 ---
 
+### Change #023: Database Backup Feature (Web Interface)
+
+**Status:** Planned  
+**Priority:** Medium  
+**Estimated Effort:** 3-4 hours  
+**Created:** January 2025
+
+#### Description
+
+Add a database backup feature accessible from the Reports page that allows staff/admin users to create, view, and download database backups. Backups will be stored locally in JSON format (using Django's `dumpdata` command) with timestamped filenames. This provides a simple way to create backups without command-line access.
+
+**Current Situation:**
+- Database backups can only be created via command line using `sync_prod_to_dev` command
+- No web interface for creating backups
+- No way to view or download existing backups from the application
+- Backups are temporary files that get deleted after sync
+
+**Goal:**
+- Add "Database Backup" card to Reports landing page
+- Allow creating and downloading backups with one click
+- Backup file downloads immediately to user's computer (no server storage)
+- Filename includes database type and timestamp: `backup_{db_type}_{YYYY-MM-DD}_{HH-MM-SS}.json`
+- Use same JSON format as `sync_prod_to_dev` command (Django `dumpdata`)
+- No server-side storage (files are temporary and deleted after download)
+
+**Benefits:**
+- Easy backup creation without command-line access
+- Immediate download to user's computer
+- No server storage required (works on Render free tier)
+- Timestamped backups for easy identification
+- Same format as sync command (can restore using `loaddata`)
+- Staff-only access maintains security
+
+#### Implementation Steps
+
+**Step 1: Create Shared Backup Utility Function**
+
+**File:** `members/utils/backup.py` (NEW)
+
+**Purpose:** Shared backup logic used by both command and view
+
+**Action:** Create minimal utility module with backup functions
+
+**Changes:**
+- Create `create_backup()` function:
+  - Detects current database (dev or prod) from `DATABASE_URL`
+  - Runs `dumpdata` using subprocess (same as sync command)
+  - Creates timestamped filename: `backup_{db_type}_{YYYY-MM-DD}_{HH-MM-SS}.json`
+  - Saves to `backups/{db_type}/` directory (creates directory if missing)
+  - Returns dict with: `{'success': bool, 'filepath': str, 'filename': str, 'size': int, 'db_type': str, 'error': str}`
+- Note: `list_backups()` and `get_backup_path()` functions are not needed for this simplified approach
+- Files are created temporarily, downloaded, then deleted immediately
+
+**Code Structure:**
+```python
+import os
+import subprocess
+import sys
+from pathlib import Path
+from datetime import datetime
+from django.conf import settings
+
+def create_backup():
+    """Create backup of current database"""
+    # Detect db type from DATABASE_URL
+    # Run dumpdata via subprocess
+    # Save to backups/{db_type}/ with timestamp
+    # Return result dict
+
+def list_backups(db_type=None):
+    """List existing backup files"""
+    # Scan backups directory
+    # Return list of backup info dicts
+
+def get_backup_path(filename):
+    """Get safe path to backup file"""
+    # Validate filename
+    # Return full path or None
+```
+
+**Lines:** ~100-120 lines
+
+**Step 2: Create Management Command**
+
+**File:** `members/management/commands/backup_database.py` (NEW)
+
+**Purpose:** Command-line interface for backups
+
+**Action:** Create Django management command that calls utility function
+
+**Changes:**
+- Create `Command` class extending `BaseCommand`
+- Call `create_backup()` from utility
+- Print success/error messages
+- Support `--db-type` option (optional, auto-detects if not provided)
+
+**Code Structure:**
+```python
+from django.core.management.base import BaseCommand
+from members.utils.backup import create_backup
+
+class Command(BaseCommand):
+    help = "Create database backup"
+    
+    def add_arguments(self, parser):
+        parser.add_argument('--db-type', choices=['dev', 'prod'], help='Database type')
+    
+    def handle(self, *args, **options):
+        result = create_backup()
+        if result['success']:
+            self.stdout.write(self.style.SUCCESS(f"Backup created: {result['filename']}"))
+        else:
+            self.stdout.write(self.style.ERROR(f"Backup failed: {result['error']}"))
+```
+
+**Lines:** ~30-40 lines
+
+**Step 3: Create Backup Download View**
+
+**File:** `members/views/backups.py` (NEW)
+
+**Purpose:** Web interface for immediate backup download
+
+**Action:** Create single view that generates and downloads backup
+
+**Changes:**
+- `download_backup_view(request)` - Single view that creates and downloads backup:
+  - Protected with `@staff_member_required`
+  - Calls `create_backup()` function to generate backup JSON
+  - Reads the backup file content
+  - Deletes the temporary file (cleanup)
+  - Returns `HttpResponse` with JSON content as file download
+  - Sets Content-Disposition header: `attachment; filename="backup_{db_type}_{timestamp}.json"`
+  - Sets Content-Type: `application/json`
+  - No server storage - file is streamed directly to user's browser
+
+**Code Structure:**
+```python
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import HttpResponse
+from members.utils.backup import create_backup
+import os
+
+@staff_member_required
+def download_backup_view(request):
+    """Create and immediately download database backup"""
+    result = create_backup()
+    
+    if not result['success']:
+        return HttpResponse(f"Backup failed: {result['error']}", status=500)
+    
+    # Read the backup file content
+    with open(result['filepath'], 'rb') as f:
+        file_content = f.read()
+    
+    # Delete the temporary file (cleanup)
+    os.unlink(result['filepath'])
+    
+    # Create HTTP response with file download
+    response = HttpResponse(file_content, content_type='application/json')
+    response['Content-Disposition'] = f'attachment; filename="{result["filename"]}"'
+    return response
+```
+
+**Note:** File is created temporarily, read into memory, deleted, then streamed to user's browser.
+
+**Lines:** ~25-30 lines
+
+**Step 4: Add URL Route**
+
+**File:** `members/urls.py` (MODIFY)
+
+**Action:** Add single URL pattern for backup download
+
+**Changes:**
+- Add backup route in reports section:
+  ```python
+  path("reports/backup-download/", views.download_backup_view, name="download_backup"),
+  ```
+
+**Lines added:** ~2-3 lines
+
+**Step 5: Export View in Init File**
+
+**File:** `members/views/__init__.py` (MODIFY)
+
+**Action:** Export backup view
+
+**Changes:**
+- Add import:
+  ```python
+  from .backups import download_backup_view
+  ```
+- Add to `__all__` list:
+  ```python
+  "download_backup_view",
+  ```
+
+**Lines added:** ~2-3 lines
+
+**Step 6: Add Backup Button to Reports Landing Page**
+
+**File:** `members/templates/members/reports/landing.html` (MODIFY)
+
+**Action:** Add backup card with download button
+
+**Changes:**
+- Add new card in the `<div class="row g-4 mt-2">` section
+- Match styling of existing cards (col-md-6, card, card-body)
+- Use database icon (`bi-database`)
+- Use danger/warning color (`border-danger` or `border-warning`)
+- Link directly to `{% url 'members:download_backup' %}`
+- Description: "Create and download database backup to your computer. Filename includes database type and timestamp."
+
+**Code to add:**
+```django
+<div class="col-md-6">
+    <div class="card h-100 border-danger">
+        <div class="card-body text-center">
+            <i class="bi bi-database text-danger" style="font-size: 3rem;"></i>
+            <h3 class="card-title mt-3">Database Backup</h3>
+            <p class="card-text text-muted">
+                Create and download database backup to your computer. Filename includes database type and timestamp.
+            </p>
+            <a href="{% url 'members:download_backup' %}" class="btn btn-danger">
+                <i class="bi bi-download me-2"></i>
+                Download Backup
+            </a>
+        </div>
+    </div>
+</div>
+```
+
+**Lines added:** ~15-20 lines
+
+**Step 7: Update Utility Function (No Changes Needed)**
+
+**File:** `members/utils/backup.py` (NO CHANGE)
+
+**Action:** No changes needed - function already creates file correctly
+
+**Changes:**
+- `create_backup()` function already works as needed
+- Creates file temporarily, view will read and delete it
+- No modifications required
+
+**Lines modified:** 0 (no changes needed)
+
+**Step 8: Update .gitignore (Not Needed)**
+
+**File:** `.gitignore` (NO CHANGE)
+
+**Action:** No need to add backups directory since files aren't stored
+
+**Changes:**
+- No changes needed - backups are temporary and deleted immediately after download
+
+#### Dependencies
+
+- ✅ Django authentication system - Completed
+- ✅ Staff member decorator exists - Completed
+- ✅ Reports landing page exists - Completed
+- ✅ `sync_prod_to_dev` command exists (as reference) - Completed
+
+#### Testing Requirements
+
+**After Step 1:**
+- [ ] `create_backup()` function creates backup file ✅ COMPLETED
+- [ ] Backup file saved to correct directory (`backups/dev/` or `backups/prod/`) ✅ COMPLETED
+- [ ] Filename includes timestamp and database type ✅ COMPLETED
+- [ ] Test with pytest: `tests/test_backup_utils.py` ✅ COMPLETED (12/12 tests passing)
+
+**After Step 2:**
+- [ ] Command runs: `python manage.py backup_database` ✅ COMPLETED
+- [ ] Command creates backup file ✅ COMPLETED
+- [ ] Command prints success message ✅ COMPLETED
+- [ ] Test with pytest: `tests/test_backup_command.py` ✅ COMPLETED (2/2 tests passing)
+
+**After Step 3:**
+- [ ] `download_backup_view` requires staff access
+- [ ] View creates backup and downloads it
+- [ ] File is deleted after download (no server storage)
+- [ ] Filename includes database type and timestamp
+- [ ] Non-staff users get 403 Forbidden
+- [ ] Test with pytest: `tests/test_backup_views.py`
+
+**After Step 4:**
+- [ ] URL resolves correctly
+- [ ] `/reports/backup-download/` triggers download
+- [ ] Download works in browser
+
+**After Step 5:**
+- [ ] View imports correctly
+- [ ] No import errors
+
+**After Step 6:**
+- [ ] Backup card appears on reports landing page
+- [ ] Card links directly to download endpoint
+- [ ] Card styling matches other cards
+- [ ] Clicking button immediately downloads backup file
+
+#### Order of Operations
+
+1. **Step 1** → Create utility functions → Run pytest tests → **STOP and verify** ✅ COMPLETED
+2. **Step 2** → Create management command → Run pytest tests → **STOP and verify** ✅ COMPLETED
+3. **Step 3** → Create download view → Run pytest tests → **STOP and verify**
+4. **Step 4** → Add URL route → Manual testing → **STOP and verify**
+5. **Step 5** → Export view → Manual testing → **STOP and verify**
+6. **Step 6** → Add button to reports page → Manual testing → **STOP and verify**
+7. **Step 7** → Verify utility function works → **Complete**
+8. **Step 8** → No changes needed → **Complete**
+
+**Important:** Test after each step before proceeding to the next step.
+
+#### Files to Create
+
+1. `members/utils/backup.py` - Backup utility functions (~100-120 lines) ✅ COMPLETED
+2. `members/management/commands/backup_database.py` - Management command (~30-40 lines) ✅ COMPLETED
+3. `members/views/backups.py` - Backup download view (~25-30 lines)
+4. `tests/test_backup_utils.py` - Utility tests (~50-60 lines) ✅ COMPLETED
+5. `tests/test_backup_command.py` - Command tests (~30-40 lines) ✅ COMPLETED
+6. `tests/test_backup_views.py` - View tests (~30-40 lines)
+
+#### Files to Modify
+
+1. `members/urls.py` - Add backup URL route (~2-3 lines)
+2. `members/views/__init__.py` - Export backup view (~2-3 lines)
+3. `members/templates/members/reports/landing.html` - Add backup card (~15-20 lines)
+
+#### Notes
+
+- **Backup Format:** JSON format using Django's `dumpdata` (same as sync command)
+- **Storage:** Temporary - file created, downloaded to user's computer, then deleted from server
+- **Naming:** `backup_{db_type}_{YYYY-MM-DD}_{HH-MM-SS}.json`
+- **Security:** Only staff/admin users can access (via `@staff_member_required`)
+- **Minimal Code:** Reuses existing `dumpdata` logic from sync command
+- **No Server Storage:** Files are temporary and deleted immediately after download (works on Render free tier)
+- **User Storage:** Each user downloads backups to their own computer
+- **Restore:** Use Django's `loaddata` command to restore backups from downloaded JSON files
+
+#### Pytest Test Files
+
+**`tests/test_backup_utils.py`:**
+- Test `create_backup()` creates file
+- Test `create_backup()` detects database type correctly
+- Test `list_backups()` returns correct list
+- Test `get_backup_path()` validates filename
+- Test `get_backup_path()` prevents directory traversal
+
+**`tests/test_backup_command.py`:**
+- Test command creates backup
+- Test command prints success message
+- Test command handles errors
+
+**`tests/test_backup_views.py`:**
+- Test `backup_manage_view` requires staff access
+- Test `backup_manage_view` displays backups list
+- Test `create_backup_view` creates backup on POST
+- Test `download_backup_view` serves file
+- Test `download_backup_view` validates filename
+- Test non-staff users get 403
+
+---
+
 ### Change #021: Replace Server-Side PDF Generation with Browser Print (Current Members Report)
 
 **Status:** ✅ Completed  

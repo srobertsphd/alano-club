@@ -56,6 +56,11 @@ urlpatterns = [
         views.deactivate_expired_members_report_view,
         name="deactivate_expired_members",
     ),
+    path(
+        "reports/backup-download/",
+        views.download_backup_view,
+        name="download_backup",
+    ),
     # Payment functionality
     path("payments/add/", views.add_payment_view, name="add_payment"),
     # Member detail (must come after edit routes to avoid conflicts)

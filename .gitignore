@@ -17,6 +17,9 @@ data/
 
 /data/2025_12_06/
 
+# backups
+backups/
+
 # logs
 logs/
 
