@@ -74,6 +74,15 @@
                         Current Members Report
                     </h1>
                     <div>
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                Sort: {% if current_sort == 'id' %}ID{% else %}Name{% endif %}
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="?sort=name">Sort by Name</a></li>
+                                <li><a class="dropdown-item" href="?sort=id">Sort by ID</a></li>
+                            </ul>
+                        </div>
                         <button type="button" class="btn btn-light me-2" onclick="window.print()">
                             <i class="bi bi-printer me-1"></i>
                             Print Report

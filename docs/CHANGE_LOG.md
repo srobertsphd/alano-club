@@ -20,6 +20,170 @@ Each change entry includes:
 
 ## Change Log
 
+### Change #022: Add Sorting Functionality to Current Members Report
+
+**Status:** Planned  
+**Priority:** Medium  
+**Estimated Effort:** 30-45 minutes  
+**Created:** January 2025
+
+#### Description
+
+Add sorting functionality to the Current Members Report, allowing users to sort by last name (ascending) or by member ID (ascending). The sorting control will be a dropdown button in the report header that shows the current sort state and is automatically hidden when printing.
+
+**Current Situation:**
+- Report is always sorted by last name, first name (ascending)
+- No way to change sort order
+- Users may want to view members sorted by member ID for different purposes
+
+**Goal:**
+- Add dropdown button in report header with two sort options:
+  - Sort by Name (last name ascending, default)
+  - Sort by ID (member ID ascending)
+- Button displays current sort state (e.g., "Sort: Name" or "Sort: ID")
+- Sorting applies to both Regular Members and Life Members sections
+- Button automatically hidden in print (via existing `.btn { display: none !important; }` CSS)
+
+**Benefits:**
+- Flexible viewing options for different use cases
+- Clear indication of current sort state
+- Print-friendly (button hidden automatically)
+- Minimal code changes
+
+#### Implementation Steps
+
+**Step 1: Update Backend View - Add Sort Parameter Handling**
+
+**File:** `members/views/reports.py`
+
+**Location:** `current_members_report_view()` function (around line 35)
+
+**Action:** Modify the `.order_by()` clause to support sort parameter
+
+**Changes:**
+- Get `sort` parameter from `request.GET` (default to "name")
+- If `sort == "id"`: Order by `member_id` ascending
+- If `sort == "name"` or default: Order by `last_name`, `first_name` ascending
+- Pass `current_sort` to template context
+
+**Code to add:**
+```python
+# Get sort parameter from request (default to "name")
+sort_by = request.GET.get("sort", "name")
+
+# Apply ordering based on sort parameter
+if sort_by == "id":
+    active_members = active_members.order_by("member_id")
+else:  # default to "name"
+    active_members = active_members.order_by("last_name", "first_name")
+
+# Add to context
+context = {
+    # ... existing context ...
+    "current_sort": sort_by,  # Add this
+}
+```
+
+**Lines modified:** ~5-7 lines
+
+**Step 2: Add Dropdown Button to Template Header**
+
+**File:** `members/templates/members/reports/current_members.html`
+
+**Location:** Card header section (around lines 76-82, next to "Print Report" button)
+
+**Action:** Add Bootstrap dropdown button for sorting
+
+**Changes:**
+- Add dropdown button group before "Print Report" button
+- Button shows current sort state: "Sort: Name" or "Sort: ID"
+- Dropdown menu with two options:
+  - "Sort by Name" → links to `?sort=name`
+  - "Sort by ID" → links to `?sort=id`
+- Preserve any existing query parameters if needed
+- Use Bootstrap 5 dropdown component
+
+**Code to add:**
+```django
+<div class="btn-group me-2">
+    <button type="button" class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+        Sort: {% if current_sort == 'id' %}ID{% else %}Name{% endif %}
+    </button>
+    <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="?sort=name">Sort by Name</a></li>
+        <li><a class="dropdown-item" href="?sort=id">Sort by ID</a></li>
+    </ul>
+</div>
+```
+
+**Lines added:** ~8-10 lines
+
+**Step 3: Verify Print CSS Hides Button**
+
+**File:** `members/templates/members/reports/current_members.html`
+
+**Location:** CSS block (around line 14)
+
+**Action:** Verify existing CSS rule hides buttons in print
+
+**Verification:**
+- Existing rule `.btn { display: none !important; }` (line 14) should already hide the dropdown button
+- No changes needed - dropdown button will be automatically hidden in print
+
+**No changes required** - existing CSS handles this
+
+#### Dependencies
+
+- ✅ Current Members Report exists - Completed
+- ✅ Print CSS exists - Completed
+- ✅ Bootstrap 5 dropdown component available - Completed
+
+#### Testing Requirements
+
+**After Step 1:**
+- [ ] Report loads with default sort (by name)
+- [ ] `?sort=name` parameter sorts by last name, first name
+- [ ] `?sort=id` parameter sorts by member ID ascending
+- [ ] Both Regular Members and Life Members sections respect sort order
+- [ ] Invalid sort parameter defaults to "name"
+
+**After Step 2:**
+- [ ] Dropdown button appears in report header
+- [ ] Button shows current sort state ("Sort: Name" or "Sort: ID")
+- [ ] Clicking dropdown shows two options
+- [ ] Selecting "Sort by Name" updates sort and refreshes page
+- [ ] Selecting "Sort by ID" updates sort and refreshes page
+- [ ] Button is hidden when printing (verify in print preview)
+
+**After Step 3:**
+- [ ] Print preview shows no sorting button
+- [ ] Sorted order is preserved in printed output
+- [ ] All print CSS rules still work correctly
+
+#### Order of Operations
+
+1. **Step 1** → Update backend view → Test sort parameters → **STOP and verify**
+2. **Step 2** → Add dropdown button → Test button functionality → **STOP and verify**
+3. **Step 3** → Verify print behavior → **Complete**
+
+**Important:** Test after each step before proceeding to the next step.
+
+#### Files to Modify
+
+1. `members/views/reports.py` - Add sort parameter handling (~5-7 lines)
+2. `members/templates/members/reports/current_members.html` - Add dropdown button (~8-10 lines)
+
+#### Notes
+
+- **Default Sort:** Defaults to "name" (last name, first name) to maintain current behavior
+- **Member ID Sort:** Sorts by `member_id` field ascending (lowest to highest)
+- **Print Behavior:** Button automatically hidden by existing `.btn { display: none !important; }` CSS rule
+- **Both Sections:** Sorting applies to both Regular Members and Life Members tables
+- **Query Parameters:** Simple implementation - no need to preserve other query parameters at this time
+- **Bootstrap Dropdown:** Uses Bootstrap 5 dropdown component (already available in project)
+
+---
+
 ### Change #021: Replace Server-Side PDF Generation with Browser Print (Current Members Report)
 
 **Status:** Planned  

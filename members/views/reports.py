@@ -19,6 +19,9 @@ def reports_landing_view(request):
 def current_members_report_view(request):
     """Generate current members report with payment history"""
 
+    # Get sort parameter from request (default to "name")
+    sort_by = request.GET.get("sort", "name")
+
     # Get all active members with their last 3 payments in one query
     active_members = (
         Member.objects.filter(status="active")
@@ -32,8 +35,13 @@ def current_members_report_view(request):
                 to_attr="recent_payments",
             )
         )
-        .order_by("last_name", "first_name")
     )
+
+    # Apply ordering based on sort parameter
+    if sort_by == "id":
+        active_members = active_members.order_by("member_id")
+    else:  # default to "name"
+        active_members = active_members.order_by("last_name", "first_name")
 
     # Separate regular members and life members
     regular_members = []
@@ -60,6 +68,7 @@ def current_members_report_view(request):
         "total_regular": len(regular_members),
         "total_life": len(life_members),
         "total_members": len(regular_members) + len(life_members),
+        "current_sort": sort_by,
     }
 
     return render(request, "members/reports/current_members.html", context)
