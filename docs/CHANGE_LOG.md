@@ -22,10 +22,11 @@ Each change entry includes:
 
 ### Change #022: Add Sorting Functionality to Current Members Report
 
-**Status:** Planned  
+**Status:** ✅ Completed  
 **Priority:** Medium  
 **Estimated Effort:** 30-45 minutes  
-**Created:** January 2025
+**Created:** January 2025  
+**Completed:** January 2025
 
 #### Description
 
@@ -186,10 +187,11 @@ context = {
 
 ### Change #021: Replace Server-Side PDF Generation with Browser Print (Current Members Report)
 
-**Status:** Planned  
+**Status:** ✅ Completed  
 **Priority:** Medium  
 **Estimated Effort:** 30-45 minutes  
-**Created:** January 2025
+**Created:** January 2025  
+**Completed:** January 2025
 
 #### Description
 
