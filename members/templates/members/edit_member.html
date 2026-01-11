@@ -281,7 +281,12 @@ document.addEventListener('DOMContentLoaded', function() {
         monthSelect.appendChild(opt);
     });
     
-    for (let y = currentYear; y <= currentYear + 4; y++) {
+    // Get expiration year and ensure it's included in dropdown range
+    const expirationYear = currentDate.getFullYear();
+    const minYear = Math.min(currentYear, expirationYear);
+    const maxYear = Math.max(currentYear + 4, expirationYear);
+    
+    for (let y = minYear; y <= maxYear; y++) {
         const opt = document.createElement('option');
         opt.value = y;
         opt.textContent = y;
@@ -289,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     monthSelect.value = currentDate.getMonth() + 1;
-    yearSelect.value = currentDate.getFullYear();
+    yearSelect.value = expirationYear;
     
     function updateExpiration() {
         const month = parseInt(monthSelect.value);
